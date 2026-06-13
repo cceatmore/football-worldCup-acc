@@ -1,0 +1,349 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>足球彩票盈亏记账</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <section id="auth-view" class="auth-view">
+        <div class="brand-card">
+          <h1>足球彩票盈亏记账</h1>
+        </div>
+
+        <div class="auth-card">
+          <div class="tabs" role="tablist" aria-label="账号操作">
+            <button id="login-tab" class="tab active" type="button">登录</button>
+            <button id="register-tab" class="tab" type="button">注册</button>
+          </div>
+
+          <form id="login-form" class="auth-form">
+            <label>账号<input id="login-username" autocomplete="username" required /></label>
+            <label>密码<input id="login-password" type="password" autocomplete="current-password" required /></label>
+            <button class="primary-btn" type="submit">登录</button>
+          </form>
+
+          <form id="register-form" class="auth-form hidden">
+            <label>昵称<input id="register-nickname" maxlength="18" placeholder="例如：小王" required /></label>
+            <label>账号<input id="register-username" autocomplete="username" maxlength="24" required /></label>
+            <label>
+              密码
+              <input id="register-password" type="password" autocomplete="new-password" minlength="6" required />
+            </label>
+            <button class="primary-btn" type="submit">注册并登录</button>
+          </form>
+
+          <p id="auth-message" class="message" aria-live="polite"></p>
+        </div>
+      </section>
+
+      <main id="main-view" class="main-view hidden">
+        <header class="topbar">
+          <div class="topbar-title-wrap">
+            <h1 id="welcome-title">我的足球记账</h1>
+          </div>
+          <div class="topbar-actions">
+            <button id="open-match-modal" class="ghost-btn" type="button">新增比赛</button>
+            <button id="open-scheme-modal" class="primary-btn" type="button">新增方案</button>
+            <button id="refresh-matches-btn" class="refresh-btn" type="button" title="从互联网同步赛事信息与赛果">刷新比赛列表</button>
+          </div>
+        </header>
+
+        <section class="dashboard-grid" aria-label="汇总面板">
+          <article class="stat-card"><span>总计消费</span><strong id="total-cost">¥0.00</strong></article>
+          <article class="stat-card"><span>总计返回</span><strong id="total-return">¥0.00</strong></article>
+          <article class="stat-card"><span>总计净盈亏</span><strong id="total-profit">¥0.00</strong></article>
+          <article class="stat-card"><span>比赛 / 方案</span><strong id="total-count">0 / 0</strong></article>
+        </section>
+
+        <section class="panel view-tabs">
+          <button id="matches-view-tab" class="view-tab active" type="button">比赛</button>
+          <button id="schemes-view-tab" class="view-tab" type="button">方案</button>
+          <button id="data-view-tab" class="view-tab" type="button">数据</button>
+        </section>
+
+        <section class="panel filters" id="filters-panel">
+          <div class="filters-head">
+            <h2 id="view-title">当前赛事</h2>
+            <div id="match-view-switch" class="match-view-switch">
+              <button id="match-active-btn" class="match-sub-tab active" type="button">当前赛事</button>
+              <button id="match-history-btn" class="match-sub-tab" type="button">赛事历史</button>
+            </div>
+          </div>
+          <div id="filter-row" class="filter-row">
+            <input id="search-input" placeholder="搜索球队、赛事、方案或玩法" hidden />
+            <div id="scheme-profit-filter" class="filter-chip-group hidden" role="group" aria-label="方案筛选">
+              <button type="button" class="filter-chip active" data-profit-filter="all">全部</button>
+              <button type="button" class="filter-chip" data-profit-filter="profit">盈利</button>
+              <button type="button" class="filter-chip" data-profit-filter="loss">亏损</button>
+              <button type="button" class="filter-chip" data-profit-filter="pending">未结算</button>
+            </div>
+          </div>
+        </section>
+
+        <section id="matches-view" class="view-panel">
+          <div class="table-card match-table-card">
+            <div class="match-table-head">
+              <div class="data-row data-head match-grid">
+                <span>比赛</span>
+                <span>赛事</span>
+                <span>时间</span>
+                <span>方案数</span>
+                <span>操作</span>
+              </div>
+            </div>
+            <div class="match-table-body">
+              <div id="match-list" class="data-list"></div>
+            </div>
+          </div>
+          <div id="match-empty-state" class="empty-state hidden">
+            <h3 id="match-empty-title">暂无未结束赛事</h3>
+          </div>
+        </section>
+
+        <section id="schemes-view" class="view-panel hidden">
+          <div class="view-scroll-body">
+            <div id="scheme-list" class="scheme-list-page"></div>
+          </div>
+          <div id="scheme-empty-state" class="empty-state hidden">
+            <h3>还没有方案</h3>
+          </div>
+        </section>
+
+        <section id="data-view" class="view-panel hidden">
+          <div class="panel data-toolbar">
+            <label class="data-filter-field">
+              <span>方案时间</span>
+              <select id="data-range">
+                <option value="all">全部方案</option>
+                <option value="today">今天</option>
+                <option value="week">最近7天</option>
+              </select>
+            </label>
+            <label class="data-filter-field">
+              <span>关联比赛</span>
+              <select id="data-match-filter"></select>
+            </label>
+          </div>
+
+          <section class="data-summary-grid">
+            <article class="stat-card">
+              <span>今日总方案</span>
+              <strong id="today-scheme-stat">0 / ¥0.00</strong>
+            </article>
+            <article class="stat-card">
+              <span>最近7天方案</span>
+              <strong id="week-scheme-stat">0 / ¥0.00</strong>
+            </article>
+            <article class="stat-card">
+              <span>总体方案盈亏</span>
+              <strong id="all-profit-stat">¥0.00</strong>
+            </article>
+            <article class="stat-card">
+              <span>当前筛选</span>
+              <strong id="match-scheme-stat">0 / ¥0.00</strong>
+            </article>
+          </section>
+
+          <div class="table-card data-table-card">
+            <div class="data-table-head">
+              <div class="data-row data-head data-scheme-grid">
+                <span>方案</span>
+                <span>比赛</span>
+                <span>时间</span>
+                <span>消费</span>
+                <span>返回</span>
+                <span>盈亏</span>
+              </div>
+            </div>
+            <div class="view-scroll-body data-table-body">
+              <div id="data-scheme-list" class="data-list"></div>
+            </div>
+          </div>
+          <div id="data-empty-state" class="empty-state hidden">
+            <h3>暂无符合条件的方案</h3>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <template id="match-row-template">
+      <article class="data-row match-grid match-row-item">
+        <div class="match-main">
+          <div class="match-title-row">
+            <span class="match-code"></span>
+            <strong class="match-title"></strong>
+          </div>
+          <button class="match-result-btn" type="button" title="点击编辑赛果"></button>
+          <p class="match-note"></p>
+        </div>
+        <span class="match-league"></span>
+        <span class="match-date"></span>
+        <span class="match-scheme-count"></span>
+        <div class="row-actions match-actions-menu">
+          <button class="ghost-btn match-menu-trigger" type="button" aria-haspopup="true" aria-expanded="false">操作</button>
+          <div class="match-action-popup hidden">
+            <button class="match-action-item edit-match" type="button">编辑</button>
+            <button class="match-action-item edit-result" type="button">赛果</button>
+            <button class="match-action-item delete-match danger-text" type="button">删除</button>
+          </div>
+        </div>
+      </article>
+    </template>
+
+    <template id="scheme-card-template">
+      <article class="scheme-page-card">
+        <div class="scheme-page-head">
+          <div class="scheme-title-row">
+            <h3 class="scheme-title"></h3>
+            <span class="scheme-status"></span>
+          </div>
+          <p class="scheme-meta"></p>
+          <div class="scheme-money"></div>
+        </div>
+        <div class="scheme-picks"></div>
+        <div class="card-actions">
+          <button class="ghost-btn edit-scheme" type="button">编辑</button>
+          <button class="ghost-btn settle-scheme" type="button">返回金额</button>
+          <button class="danger-text-btn delete-scheme" type="button">删除方案</button>
+        </div>
+      </article>
+    </template>
+
+    <template id="data-scheme-row-template">
+      <article class="data-row data-scheme-grid data-scheme-row">
+        <strong class="data-scheme-name"></strong>
+        <span class="data-scheme-matches"></span>
+        <span class="data-scheme-date"></span>
+        <span class="data-scheme-cost"></span>
+        <span class="data-scheme-return"></span>
+        <span class="data-scheme-profit"></span>
+      </article>
+    </template>
+
+    <div id="match-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="match-modal-title">
+      <div class="modal-backdrop" data-close-modal></div>
+      <section class="modal-card">
+        <div class="modal-head">
+          <div>
+            <h2 id="match-modal-title">新增比赛</h2>
+          </div>
+          <button class="icon-btn" type="button" data-close-modal aria-label="关闭">×</button>
+        </div>
+        <form id="match-form" class="stack-form">
+          <div class="two-cols">
+            <label>主队<input id="home-team" placeholder="巴西" required /></label>
+            <label>客队<input id="away-team" placeholder="韩国" required /></label>
+          </div>
+          <div class="two-cols">
+            <label>赛事<input id="match-league" placeholder="国际赛 / 英超 / 欧冠" /></label>
+            <label>比赛编号<input id="match-code" placeholder="周三001" /></label>
+          </div>
+          <label>比赛时间<input id="match-date" type="datetime-local" /></label>
+          <label>备注<textarea id="match-note" rows="2" placeholder="赛事、轮次、其他说明"></textarea></label>
+          <div class="modal-actions">
+            <button class="ghost-btn" type="button" data-close-modal>取消</button>
+            <button class="primary-btn" type="submit">保存比赛</button>
+          </div>
+        </form>
+      </section>
+    </div>
+
+    <div id="scheme-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="scheme-modal-title">
+      <div class="modal-backdrop" data-close-modal></div>
+      <section class="modal-card wide-modal-card">
+        <div class="modal-head">
+          <div>
+            <h2 id="scheme-modal-title">新增方案</h2>
+          </div>
+          <button class="icon-btn" type="button" data-close-modal aria-label="关闭">×</button>
+        </div>
+        <form id="scheme-form" class="stack-form">
+          <label>方案名称<input id="scheme-name" placeholder="例如：周末混合 3 串 1" required /></label>
+          <div class="scheme-bet-type-field">
+            <div class="scheme-builder-head">
+              <strong>投注方式</strong>
+              <span class="muted">可多选，最高 8 串 1</span>
+            </div>
+            <div id="scheme-bet-type-group" class="bet-type-chip-group"></div>
+          </div>
+
+          <div class="scheme-builder-head">
+            <strong>选择场次与投注项</strong>
+            <span id="scheme-pick-summary" class="muted">已选 0 场</span>
+          </div>
+          <div class="scheme-picker-toolbar">
+            <div class="scheme-match-select" id="scheme-match-select">
+              <button
+                id="scheme-add-match-trigger"
+                class="scheme-match-select-trigger"
+                type="button"
+                aria-haspopup="listbox"
+                aria-expanded="false"
+              >
+                请选择赛事
+              </button>
+              <div id="scheme-add-match-panel" class="scheme-match-select-panel hidden" role="listbox"></div>
+            </div>
+            <button id="scheme-add-match-btn" class="ghost-btn" type="button">添加赛事</button>
+          </div>
+          <div id="scheme-match-picker" class="scheme-match-picker"></div>
+
+          <label>方案金额<input id="scheme-cost" type="number" min="0" step="0.01" placeholder="100" required /></label>
+          <label>方案备注<textarea id="scheme-note" rows="2" placeholder="倍数、胆码、串关说明等"></textarea></label>
+          <div class="modal-actions">
+            <button class="ghost-btn" type="button" data-close-modal>取消</button>
+            <button class="primary-btn" type="submit">保存方案</button>
+          </div>
+        </form>
+      </section>
+    </div>
+
+    <div id="result-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="result-modal-title">
+      <div class="modal-backdrop" data-close-modal></div>
+      <section class="modal-card small-modal-card">
+        <div class="modal-head">
+          <div>
+            <h2 id="result-modal-title">编辑赛果</h2>
+            <p id="result-match-title" class="muted"></p>
+          </div>
+          <button class="icon-btn" type="button" data-close-modal aria-label="关闭">×</button>
+        </div>
+        <form id="result-form" class="stack-form">
+          <div class="two-cols">
+            <label>主队进球<input id="result-home-score" type="number" min="0" step="1" placeholder="0" /></label>
+            <label>客队进球<input id="result-away-score" type="number" min="0" step="1" placeholder="0" /></label>
+          </div>
+          <div class="modal-actions">
+            <button class="ghost-btn" type="button" data-close-modal>取消</button>
+            <button class="primary-btn" type="submit">保存赛果</button>
+          </div>
+        </form>
+      </section>
+    </div>
+
+    <div id="settle-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="settle-modal-title">
+      <div class="modal-backdrop" data-close-modal></div>
+      <section class="modal-card small-modal-card">
+        <div class="modal-head">
+          <div>
+            <h2 id="settle-modal-title">填写返回金额</h2>
+            <p id="settle-scheme-title" class="muted"></p>
+          </div>
+          <button class="icon-btn" type="button" data-close-modal aria-label="关闭">×</button>
+        </div>
+        <form id="settle-form" class="stack-form">
+          <label>返回金额<input id="settle-return" type="number" min="0" step="0.01" placeholder="0" /></label>
+          <div class="modal-actions">
+            <button class="ghost-btn" type="button" data-close-modal>取消</button>
+            <button class="primary-btn" type="submit">更新金额</button>
+          </div>
+        </form>
+      </section>
+    </div>
+
+    <script src="./app.js"></script>
+  </body>
+</html>
