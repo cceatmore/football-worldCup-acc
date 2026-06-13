@@ -230,6 +230,9 @@
     weekSchemeStat: document.querySelector("#week-scheme-stat"),
     allProfitStat: document.querySelector("#all-profit-stat"),
     matchSchemeStat: document.querySelector("#match-scheme-stat"),
+    dataFilterProfitStat: document.querySelector("#data-filter-profit-stat"),
+    dataFilterLossStat: document.querySelector("#data-filter-loss-stat"),
+    dataFilterPendingStat: document.querySelector("#data-filter-pending-stat"),
     dataSchemeList: document.querySelector("#data-scheme-list"),
     dataEmptyState: document.querySelector("#data-empty-state"),
     dataSchemeRowTemplate: document.querySelector("#data-scheme-row-template"),
@@ -1016,6 +1019,7 @@
     els.allProfitStat.textContent = formatMoney(sumProfit(allSchemes));
     els.allProfitStat.className = sumProfit(allSchemes) >= 0 ? "profit" : "loss";
     els.matchSchemeStat.textContent = `${visibleSchemes.length} 个 / ${formatMoney(sumProfit(visibleSchemes))}`;
+    renderDataFilterSummary(visibleSchemes);
 
     els.dataSchemeList.innerHTML = "";
     els.dataEmptyState.classList.toggle("hidden", visibleSchemes.length > 0);
@@ -1062,6 +1066,37 @@
     return getSchemesByRange(schemes, state.dataRange).filter((scheme) => {
       return state.dataMatchId === "all" || scheme.picks.some((pick) => pick.matchId === state.dataMatchId);
     });
+  }
+
+  function summarizeFilteredSchemes(schemes) {
+    const summary = {
+      profit: { count: 0, amount: 0 },
+      loss: { count: 0, amount: 0 },
+      pending: { count: 0, cost: 0 },
+    };
+    schemes.forEach((scheme) => {
+      if (!isSchemeReturnFilled(scheme)) {
+        summary.pending.count += 1;
+        summary.pending.cost += scheme.cost || 0;
+        return;
+      }
+      const profit = scheme.returnAmount - scheme.cost;
+      if (profit > 0) {
+        summary.profit.count += 1;
+        summary.profit.amount += profit;
+      } else if (profit < 0) {
+        summary.loss.count += 1;
+        summary.loss.amount += profit;
+      }
+    });
+    return summary;
+  }
+
+  function renderDataFilterSummary(schemes) {
+    const summary = summarizeFilteredSchemes(schemes);
+    els.dataFilterProfitStat.textContent = `${summary.profit.count} 个 / ${formatMoney(summary.profit.amount)}`;
+    els.dataFilterLossStat.textContent = `${summary.loss.count} 个 / ${formatMoney(summary.loss.amount)}`;
+    els.dataFilterPendingStat.textContent = `${summary.pending.count} 个 / 消费 ${formatMoney(summary.pending.cost)}`;
   }
 
   function getSchemesByRange(schemes, range) {
