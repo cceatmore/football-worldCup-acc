@@ -9,7 +9,14 @@
   const playGroups = [
     { type: "胜平负", options: ["主胜", "平", "客胜"] },
     { type: "让球胜平负", options: ["让胜", "让平", "让负"] },
-    { type: "比分", options: ["1:0", "2:0", "2:1", "3:0", "0:0", "1:1", "2:2", "0:1", "0:2", "1:2", "胜其他", "平其他", "负其他"] },
+    {
+      type: "比分",
+      options: [
+        "1:0", "2:0", "2:1", "3:0", "3:1", "3:2", "4:0", "4:1", "4:2", "5:0", "5:1", "5:2", "胜其他",
+        "0:0", "1:1", "2:2", "3:3", "平其他",
+        "0:1", "0:2", "1:2", "0:3", "1:3", "2:3", "0:4", "1:4", "2:4", "0:5", "1:5", "2:5", "负其他",
+      ],
+    },
     { type: "总进球", options: ["0球", "1球", "2球", "3球", "4球", "5球", "6球", "7+球"] },
     { type: "半全场", options: ["胜胜", "胜平", "胜负", "平胜", "平平", "平负", "负胜", "负平", "负负"] },
   ];
@@ -171,6 +178,8 @@
     schemeAddMatchId: "",
     schemeVisibleMatchIds: [],
     scrollYBeforeModal: 0,
+    refreshInFlight: null,
+    syncToastTimer: null,
   };
 
   const els = {
@@ -255,6 +264,7 @@
     settleForm: document.querySelector("#settle-form"),
     settleSchemeTitle: document.querySelector("#settle-scheme-title"),
     settleReturn: document.querySelector("#settle-return"),
+    syncToast: document.querySelector("#sync-toast"),
   };
 
   init();
@@ -262,6 +272,7 @@
   function init() {
     migrateAllUsers();
     bindEvents();
+    warnIfStorageUnreliable();
     if (state.currentUser && state.db.users[state.currentUser]) {
       showMain();
     } else {
@@ -330,6 +341,48 @@
       if (els.schemeAddMatchPanel.classList.contains("hidden")) return;
       if (!event.target.closest(".scheme-match-select")) closeSchemeMatchSelectPanel();
     });
+    bindStorageSync();
+  }
+
+  function bindStorageSync() {
+    window.addEventListener("storage", (event) => {
+      if (event.key !== STORAGE_KEY && event.key !== SESSION_KEY && event.key !== null) return;
+      syncFromStorageAndRender();
+    });
+    document.addEventListener("visibilitychange", () => {
+      if (!document.hidden) syncFromStorageAndRender();
+    });
+    window.addEventListener("pageshow", (event) => {
+      if (event.persisted) syncFromStorageAndRender();
+    });
+    window.addEventListener("focus", syncFromStorageAndRender);
+  }
+
+  function reloadDbFromStorage() {
+    state.db = loadDb();
+    const sessionUser = localStorage.getItem(SESSION_KEY) || "";
+    if (sessionUser && state.db.users[sessionUser]) {
+      state.currentUser = sessionUser;
+      return;
+    }
+    if (state.currentUser && !state.db.users[state.currentUser]) {
+      state.currentUser = "";
+      localStorage.removeItem(SESSION_KEY);
+    }
+  }
+
+  function syncFromStorageAndRender() {
+    reloadDbFromStorage();
+    if (state.currentUser && state.db.users[state.currentUser]) {
+      if (els.mainView.classList.contains("hidden")) {
+        showMain();
+        return;
+      }
+      render();
+      return;
+    }
+    if (!els.authView.classList.contains("hidden")) return;
+    showAuth();
   }
 
   function bindMatchActionMenu(node, match) {
@@ -481,6 +534,7 @@
     els.authView.classList.add("hidden");
     els.mainView.classList.remove("hidden");
     switchView(state.activeView);
+    void refreshMatches({ auto: true });
   }
 
   function render() {
@@ -576,23 +630,58 @@
   }
 
   async function handleRefreshMatches() {
+    await refreshMatches({ manual: true });
+  }
+
+  async function refreshMatches({ auto = false, manual = false } = {}) {
+    if (state.refreshInFlight) return state.refreshInFlight;
+
     const button = els.refreshMatchesBtn;
     const originalText = button.textContent;
-    button.disabled = true;
-    button.textContent = "同步中...";
-    try {
-      const remoteMatches = await fetchRemoteMatchData();
-      const stats = applyRemoteMatchSync(remoteMatches);
-      saveDb();
-      render();
-      alert(`同步完成：更新 ${stats.updated} 场，新增赛果 ${stats.resultsAdded} 场。`);
-    } catch (error) {
-      console.error("Match sync failed", error);
-      alert("同步失败，请检查网络连接后重试。");
-    } finally {
-      button.disabled = false;
-      button.textContent = originalText;
+    state.refreshInFlight = (async () => {
+      button.disabled = true;
+      button.textContent = "同步中...";
+      showSyncToast("正在同步赛事数据，请稍候…", "loading");
+      try {
+        const remoteMatches = await fetchRemoteMatchData();
+        const stats = applyRemoteMatchSync(remoteMatches);
+        saveDb();
+        render();
+        const message = stats.updated || stats.resultsAdded
+          ? `同步完成：更新 ${stats.updated} 场，新增赛果 ${stats.resultsAdded} 场`
+          : "同步完成，赛事数据已是最新";
+        showSyncToast(message, "success");
+      } catch (error) {
+        console.error("Match sync failed", error);
+        showSyncToast("同步失败，当前显示本地数据，请检查网络后重试", "error");
+        if (manual) {
+          setTimeout(() => {
+            showSyncToast("可点击右上角「刷新比赛列表」手动重试", "error", 5000);
+          }, 4200);
+        }
+      } finally {
+        button.disabled = false;
+        button.textContent = originalText;
+        state.refreshInFlight = null;
+      }
+    })();
+
+    return state.refreshInFlight;
+  }
+
+  function showSyncToast(message, type = "info", duration = 3200) {
+    clearTimeout(state.syncToastTimer);
+    els.syncToast.textContent = message;
+    els.syncToast.classList.remove("hidden", "is-loading", "is-success", "is-error");
+    if (type === "loading") {
+      els.syncToast.classList.add("is-loading");
+      return;
     }
+    if (type === "success") els.syncToast.classList.add("is-success");
+    if (type === "error") els.syncToast.classList.add("is-error");
+    state.syncToastTimer = setTimeout(() => {
+      els.syncToast.classList.add("hidden");
+    }, duration);
   }
 
   async function fetchRemoteMatchData() {
@@ -1762,7 +1851,17 @@
   }
 
   function saveDb() {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state.db));
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state.db));
+    } catch (error) {
+      console.error("Failed to save data", error);
+      alert("本地存储失败，请检查浏览器是否禁用了网站数据，或不要使用无痕模式。");
+    }
+  }
+
+  function warnIfStorageUnreliable() {
+    if (location.protocol !== "file:") return;
+    console.warn("当前通过 file:// 打开页面，浏览器可能无法稳定保存数据。请使用 http://localhost 或 GitHub Pages 访问。");
   }
 
   function createWorldCupMatches() {
