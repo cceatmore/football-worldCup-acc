@@ -197,7 +197,6 @@
     authMessage: document.querySelector("#auth-message"),
     welcomeTitle: document.querySelector("#welcome-title"),
     refreshMatchesBtn: document.querySelector("#refresh-matches-btn"),
-    openMatchModalBtn: document.querySelector("#open-match-modal"),
     openSchemeModalBtn: document.querySelector("#open-scheme-modal"),
     matchesViewTab: document.querySelector("#matches-view-tab"),
     schemesViewTab: document.querySelector("#schemes-view-tab"),
@@ -264,6 +263,8 @@
     resultMatchTitle: document.querySelector("#result-match-title"),
     resultHomeScore: document.querySelector("#result-home-score"),
     resultAwayScore: document.querySelector("#result-away-score"),
+    resultHalfHomeScore: document.querySelector("#result-half-home-score"),
+    resultHalfAwayScore: document.querySelector("#result-half-away-score"),
     settleForm: document.querySelector("#settle-form"),
     settleSchemeTitle: document.querySelector("#settle-scheme-title"),
     settleReturn: document.querySelector("#settle-return"),
@@ -293,7 +294,6 @@
     els.matchesViewTab.addEventListener("click", () => switchView("matches"));
     els.schemesViewTab.addEventListener("click", () => switchView("schemes"));
     els.dataViewTab.addEventListener("click", () => switchView("data"));
-    els.openMatchModalBtn.addEventListener("click", openAddMatchModal);
     els.openSchemeModalBtn.addEventListener("click", openSchemeModal);
     els.refreshMatchesBtn.addEventListener("click", handleRefreshMatches);
     els.matchActiveBtn.addEventListener("click", () => switchMatchSubView("active"));
@@ -599,12 +599,14 @@
       node.querySelector(".match-date").textContent = match.matchDate ? formatDate(match.matchDate) : "-";
       const resultBtn = node.querySelector(".match-result-btn");
       const hasResult = hasMatchResult(match);
-      resultBtn.textContent = hasResult ? getResultText(match) : "";
+      const totalGoals = getTotalGoals(match);
+      const halfFullText = getHalfFullText(match);
+      node.querySelector(".match-score").textContent = hasResult ? getResultText(match) : "";
+      node.querySelector(".match-goals").textContent = hasResult ? `总进球 ${totalGoals}` : "";
+      node.querySelector(".match-half-full").textContent = hasResult && halfFullText ? `半全场 ${halfFullText}` : "";
       resultBtn.classList.toggle("has-result", hasResult);
       resultBtn.classList.toggle("is-empty", !hasResult);
-      resultBtn.addEventListener("click", () => openResultModal(match));
       node.querySelector(".match-scheme-count").textContent = `${getSchemesByMatch(match.id).length} 个方案`;
-      bindMatchActionMenu(node, match);
       parent.appendChild(node);
     });
   }
@@ -689,41 +691,81 @@
 
   async function fetchRemoteMatchData() {
     const errors = [];
+    let primaryMatches = [];
     try {
       const response = await fetch("https://worldcup26.ir/get/games");
       if (response.ok) {
         const data = await response.json();
         const parsed = await parseWorldCup26Games(data);
-        if (parsed.length) return parsed;
+        if (parsed.length) primaryMatches = parsed;
       }
     } catch (error) {
       errors.push(error);
     }
 
-    try {
+    if (!primaryMatches.length) try {
       const response = await fetch("https://wc2026.moothz.win/get/games");
       if (response.ok) {
         const data = await response.json();
         const parsed = await parseWorldCup26Games(data);
-        if (parsed.length) return parsed;
+        if (parsed.length) primaryMatches = parsed;
       }
     } catch (error) {
       errors.push(error);
     }
 
+    let espnMatches = [];
     try {
       const response = await fetch(`https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard?dates=${buildEspnDateRange()}`);
       if (response.ok) {
         const data = await response.json();
-        const parsed = parseEspnScoreboard(data);
-        if (parsed.length) return parsed;
+        const parsed = await parseEspnScoreboard(data);
+        if (parsed.length) espnMatches = parsed;
       }
     } catch (error) {
       errors.push(error);
     }
 
+    if (primaryMatches.length && espnMatches.length) return mergeRemoteMatchData(primaryMatches, espnMatches);
+    if (primaryMatches.length) return primaryMatches;
+    if (espnMatches.length) return espnMatches;
+
     if (errors.length) console.warn("Remote sync errors", errors);
     throw new Error("No remote match data");
+  }
+
+  function mergeRemoteMatchData(primaryMatches, scoreMatches) {
+    const scoresByCode = new Map(scoreMatches.filter((match) => match.code).map((match) => [match.code, match]));
+    const usedScoreKeys = new Set();
+    const merged = primaryMatches.map((match) => {
+      const scoreMatch = scoresByCode.get(match.code) || findScoreMatchForRemote(match, scoreMatches);
+      if (!scoreMatch) return match;
+      usedScoreKeys.add(getRemoteMatchKey(scoreMatch));
+      if (!scoreMatch.finished || scoreMatch.homeScore === "" || scoreMatch.awayScore === "") return match;
+      return {
+        ...match,
+        homeScore: scoreMatch.homeScore,
+        awayScore: scoreMatch.awayScore,
+        halfHomeScore: scoreMatch.halfHomeScore,
+        halfAwayScore: scoreMatch.halfAwayScore,
+        finished: true,
+      };
+    });
+    return [
+      ...merged,
+      ...scoreMatches.filter((match) => !usedScoreKeys.has(getRemoteMatchKey(match))),
+    ];
+  }
+
+  function findScoreMatchForRemote(match, scoreMatches) {
+    if (!match.code) return null;
+    return scoreMatches.find((scoreMatch) =>
+      findMatchCodeByTeams(scoreMatch.homeTeamEn, scoreMatch.awayTeamEn) === match.code
+    ) || null;
+  }
+
+  function getRemoteMatchKey(match) {
+    return match.code || match.eventId || `${match.homeTeamEn}-${match.awayTeamEn}-${match.matchDate}`;
   }
 
   async function parseWorldCup26Games(data) {
@@ -740,6 +782,7 @@
         awayTeamEn: game.away_team_name_en || "",
         homeScore: finished ? String(game.home_score ?? "") : "",
         awayScore: finished ? String(game.away_score ?? "") : "",
+        ...extractWorldCupHalfScores(game),
         matchDate: localDate ? convertWallTimeToBeijing(localDate, sourceTimeZone) : "",
         league: group ? `世界杯${group}组` : "世界杯",
         finished,
@@ -747,9 +790,9 @@
     });
   }
 
-  function parseEspnScoreboard(data) {
+  async function parseEspnScoreboard(data) {
     if (!Array.isArray(data?.events)) return [];
-    return data.events.map((event) => {
+    const matches = data.events.map((event) => {
       const competition = event.competitions?.[0];
       const competitors = competition?.competitors || [];
       const home = competitors.find((item) => item.homeAway === "home") || competitors[0];
@@ -757,17 +800,129 @@
       const finished = competition?.status?.type?.state === "post";
       const homeTeamEn = home?.team?.displayName || "";
       const awayTeamEn = away?.team?.displayName || "";
+      const halfScores = extractEspnHalfScores(competition, home, away);
       return {
+        eventId: event.id || competition?.id || "",
         code: findMatchCodeByTeams(homeTeamEn, awayTeamEn),
         homeTeamEn,
         awayTeamEn,
         homeScore: finished ? String(home?.score ?? "") : "",
         awayScore: finished ? String(away?.score ?? "") : "",
+        halfHomeScore: finished ? halfScores.halfHomeScore : "",
+        halfAwayScore: finished ? halfScores.halfAwayScore : "",
         matchDate: event.date ? utcIsoToBeijingLocalIso(event.date) : "",
         league: findPresetLeagueByTeams(homeTeamEn, awayTeamEn),
         finished,
       };
     }).filter((item) => item.homeTeamEn && item.awayTeamEn);
+
+    await hydrateEspnHalfScoresFromSummaries(matches);
+    return matches;
+  }
+
+  async function hydrateEspnHalfScoresFromSummaries(matches) {
+    const missingHalfScores = matches.filter((match) =>
+      match.finished
+      && match.eventId
+      && match.homeScore !== ""
+      && match.awayScore !== ""
+      && (match.halfHomeScore === "" || match.halfAwayScore === "")
+    );
+    if (!missingHalfScores.length) return;
+
+    await Promise.all(missingHalfScores.map(async (match) => {
+      try {
+        const response = await fetch(`https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/summary?event=${match.eventId}`);
+        if (!response.ok) return;
+        const data = await response.json();
+        const competition = data?.header?.competitions?.[0];
+        const competitors = competition?.competitors || [];
+        const home = competitors.find((item) => item.homeAway === "home") || competitors[0];
+        const away = competitors.find((item) => item.homeAway === "away") || competitors[1];
+        const halfScores = extractEspnHalfScores(competition, home, away);
+        if (halfScores.halfHomeScore !== "" && halfScores.halfAwayScore !== "") {
+          match.halfHomeScore = halfScores.halfHomeScore;
+          match.halfAwayScore = halfScores.halfAwayScore;
+        }
+      } catch (error) {
+        console.warn("ESPN summary half-time sync failed", match.eventId, error);
+      }
+    }));
+  }
+
+  function extractWorldCupHalfScores(game) {
+    const home = firstPresentValue(game, [
+      "half_home_score",
+      "home_half_score",
+      "home_score_half",
+      "home_ht_score",
+      "ht_home_score",
+      "first_half_home_score",
+    ]);
+    const away = firstPresentValue(game, [
+      "half_away_score",
+      "away_half_score",
+      "away_score_half",
+      "away_ht_score",
+      "ht_away_score",
+      "first_half_away_score",
+    ]);
+    return {
+      halfHomeScore: home == null ? "" : String(home),
+      halfAwayScore: away == null ? "" : String(away),
+    };
+  }
+
+  function extractEspnHalfScores(competition, home, away) {
+    const details = competition?.details;
+    if (!Array.isArray(details)) return { halfHomeScore: "", halfAwayScore: "" };
+
+    const homeTeamId = String(home?.team?.id || home?.id || "");
+    const awayTeamId = String(away?.team?.id || away?.id || "");
+    let halfHomeScore = 0;
+    let halfAwayScore = 0;
+    let hasGoalDetails = false;
+
+    details.forEach((detail) => {
+      if (isGoalDetail(detail)) hasGoalDetails = true;
+      if (!isFirstHalfGoal(detail)) return;
+      const teamId = String(detail.team?.id || "");
+      const value = Number(detail.scoreValue || 1);
+      const scoreValue = Number.isFinite(value) ? value : 1;
+      if (teamId === homeTeamId) halfHomeScore += scoreValue;
+      if (teamId === awayTeamId) halfAwayScore += scoreValue;
+    });
+
+    const fullHomeScore = Number(home?.score);
+    const fullAwayScore = Number(away?.score);
+    if (!hasGoalDetails && (fullHomeScore > 0 || fullAwayScore > 0)) {
+      return { halfHomeScore: "", halfAwayScore: "" };
+    }
+
+    return {
+      halfHomeScore: String(halfHomeScore),
+      halfAwayScore: String(halfAwayScore),
+    };
+  }
+
+  function isFirstHalfGoal(detail) {
+    if (!isGoalDetail(detail)) return false;
+    const displayClock = String(detail.clock?.displayValue || "");
+    const minuteMatch = displayClock.match(/^(\d+)/);
+    if (minuteMatch) return Number(minuteMatch[1]) <= 45;
+    const clockValue = Number(detail.clock?.value);
+    return Number.isFinite(clockValue) && clockValue <= 45 * 60;
+  }
+
+  function isGoalDetail(detail) {
+    return Boolean(detail?.scoringPlay && !detail.shootout);
+  }
+
+  function firstPresentValue(source, keys) {
+    for (const key of keys) {
+      if (source?.[key] !== undefined && source[key] !== null && source[key] !== "") return source[key];
+    }
+    return null;
   }
 
   function applyRemoteMatchSync(remoteMatches) {
@@ -794,7 +949,13 @@
       }
       if (remote.finished && remote.homeScore !== "" && remote.awayScore !== "") {
         const hadResult = hasMatchResult(match);
-        match.result = { homeScore: remote.homeScore, awayScore: remote.awayScore };
+        match.result = {
+          ...(match.result || {}),
+          homeScore: remote.homeScore,
+          awayScore: remote.awayScore,
+          halfHomeScore: remote.halfHomeScore || "",
+          halfAwayScore: remote.halfAwayScore || "",
+        };
         if (!hadResult) resultsAdded += 1;
         changed = true;
       }
@@ -952,18 +1113,25 @@
   }
 
   function buildEspnDateRange() {
-    const dates = [];
-    const cursor = new Date();
-    cursor.setHours(12, 0, 0, 0);
-    for (let offset = -10; offset <= 14; offset += 1) {
-      const day = new Date(cursor);
-      day.setDate(cursor.getDate() + offset);
-      const year = day.getFullYear();
-      const month = String(day.getMonth() + 1).padStart(2, "0");
-      const date = String(day.getDate()).padStart(2, "0");
-      dates.push(`${year}${month}${date}`);
-    }
-    return dates.join(",");
+    const dates = worldCupMatches
+      .map((match) => parseStoredMatchDate(match.matchDate)?.slice(0, 10).replaceAll("-", ""))
+      .filter(Boolean)
+      .sort();
+    if (!dates.length) return "";
+    return `${shiftCompactDate(dates[0], -1)}-${shiftCompactDate(dates[dates.length - 1], 1)}`;
+  }
+
+  function shiftCompactDate(value, offsetDays) {
+    const year = Number(value.slice(0, 4));
+    const month = Number(value.slice(4, 6)) - 1;
+    const day = Number(value.slice(6, 8));
+    const date = new Date(year, month, day);
+    date.setDate(date.getDate() + offsetDays);
+    return [
+      date.getFullYear(),
+      String(date.getMonth() + 1).padStart(2, "0"),
+      String(date.getDate()).padStart(2, "0"),
+    ].join("");
   }
 
   function toDateTimeLocalValue(date) {
@@ -1217,7 +1385,7 @@
       user.matches.unshift({
         id: createId(),
         ...payload,
-        result: { homeScore: "", awayScore: "" },
+        result: { homeScore: "", awayScore: "", halfHomeScore: "", halfAwayScore: "" },
         createdAt: new Date().toISOString(),
       });
     }
@@ -1634,6 +1802,8 @@
     els.resultMatchTitle.textContent = getMatchTitle(match, false);
     els.resultHomeScore.value = getScoreInputValue(match.result?.homeScore);
     els.resultAwayScore.value = getScoreInputValue(match.result?.awayScore);
+    els.resultHalfHomeScore.value = match.result?.halfHomeScore ?? "";
+    els.resultHalfAwayScore.value = match.result?.halfAwayScore ?? "";
     openModal(els.resultModal);
   }
 
@@ -1641,7 +1811,13 @@
     event.preventDefault();
     const match = findMatchById(state.editingResultMatchId);
     if (match) {
-      match.result = { homeScore: els.resultHomeScore.value, awayScore: els.resultAwayScore.value };
+      match.result = {
+        ...(match.result || {}),
+        homeScore: els.resultHomeScore.value.trim(),
+        awayScore: els.resultAwayScore.value.trim(),
+        halfHomeScore: els.resultHalfHomeScore.value.trim(),
+        halfAwayScore: els.resultHalfAwayScore.value.trim(),
+      };
       saveDb();
     }
     closeAllModals();
@@ -1824,6 +2000,34 @@
     return `${match.result.homeScore}:${match.result.awayScore}`;
   }
 
+  function getTotalGoals(match) {
+    if (!hasMatchResult(match)) return "-";
+    const home = Number(match.result.homeScore);
+    const away = Number(match.result.awayScore);
+    if (!Number.isFinite(home) || !Number.isFinite(away)) return "-";
+    return home + away;
+  }
+
+  function getHalfFullText(match) {
+    if (!hasHalfTimeResult(match) || !hasMatchResult(match)) return "";
+    return `${getOutcomeText(match.result.halfHomeScore, match.result.halfAwayScore)}${getOutcomeText(match.result.homeScore, match.result.awayScore)}`;
+  }
+
+  function hasHalfTimeResult(match) {
+    const home = match.result?.halfHomeScore;
+    const away = match.result?.halfAwayScore;
+    return home !== "" && home != null && away !== "" && away != null;
+  }
+
+  function getOutcomeText(homeScore, awayScore) {
+    const home = Number(homeScore);
+    const away = Number(awayScore);
+    if (!Number.isFinite(home) || !Number.isFinite(away)) return "-";
+    if (home > away) return "胜";
+    if (home < away) return "负";
+    return "平";
+  }
+
   function getScoreInputValue(score) {
     if (score === "" || score == null) return 0;
     return score;
@@ -1854,6 +2058,8 @@
       }
       user.matches.forEach((match) => {
         match.result ||= { homeScore: "", awayScore: "" };
+        match.result.halfHomeScore ??= "";
+        match.result.halfAwayScore ??= "";
         delete match.schemes;
       });
     });
@@ -1903,7 +2109,7 @@
     return worldCupMatches.map((match) => ({
       id: createId(),
       ...match,
-      result: { homeScore: "", awayScore: "" },
+      result: { homeScore: "", awayScore: "", halfHomeScore: "", halfAwayScore: "" },
       createdAt: new Date().toISOString(),
     }));
   }

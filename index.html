@@ -46,7 +46,6 @@
             <h1 id="welcome-title">我的足球记账</h1>
           </div>
           <div class="topbar-actions">
-            <button id="open-match-modal" class="ghost-btn" type="button">新增比赛</button>
             <button id="open-scheme-modal" class="primary-btn" type="button">新增方案</button>
             <button id="refresh-matches-btn" class="refresh-btn" type="button" title="从互联网同步赛事信息与赛果">刷新比赛列表</button>
           </div>
@@ -89,10 +88,10 @@
             <div class="match-table-head">
               <div class="data-row data-head match-grid">
                 <span>比赛</span>
+                <span>赛果</span>
                 <span>赛事</span>
                 <span>时间</span>
                 <span>方案数</span>
-                <span>操作</span>
               </div>
             </div>
             <div class="match-table-body">
@@ -192,20 +191,18 @@
             <span class="match-code"></span>
             <strong class="match-title"></strong>
           </div>
-          <button class="match-result-btn" type="button" title="点击编辑赛果"></button>
           <p class="match-note"></p>
+        </div>
+        <div class="match-result-btn" aria-label="赛果">
+          <span class="match-result-line">
+            <strong class="match-score"></strong>
+            <small class="match-goals"></small>
+          </span>
+          <span class="match-half-full"></span>
         </div>
         <span class="match-league"></span>
         <span class="match-date"></span>
         <span class="match-scheme-count"></span>
-        <div class="row-actions match-actions-menu">
-          <button class="ghost-btn match-menu-trigger" type="button" aria-haspopup="true" aria-expanded="false">操作</button>
-          <div class="match-action-popup hidden">
-            <button class="match-action-item edit-match" type="button">编辑</button>
-            <button class="match-action-item edit-result" type="button">赛果</button>
-            <button class="match-action-item delete-match danger-text" type="button">删除</button>
-          </div>
-        </div>
       </article>
     </template>
 
@@ -329,8 +326,12 @@
         </div>
         <form id="result-form" class="stack-form">
           <div class="two-cols">
-            <label>主队进球<input id="result-home-score" type="number" min="0" step="1" placeholder="0" /></label>
-            <label>客队进球<input id="result-away-score" type="number" min="0" step="1" placeholder="0" /></label>
+            <label>全场主队进球<input id="result-home-score" type="number" min="0" step="1" placeholder="0" /></label>
+            <label>全场客队进球<input id="result-away-score" type="number" min="0" step="1" placeholder="0" /></label>
+          </div>
+          <div class="two-cols">
+            <label>半场主队进球<input id="result-half-home-score" type="number" min="0" step="1" placeholder="0" /></label>
+            <label>半场客队进球<input id="result-half-away-score" type="number" min="0" step="1" placeholder="0" /></label>
           </div>
           <div class="modal-actions">
             <button class="ghost-btn" type="button" data-close-modal>取消</button>
