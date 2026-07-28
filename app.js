@@ -230,9 +230,9 @@
 
       row.innerHTML = `
         <td><input class="cell-input" data-field="date" value="${esc(entry.date)}" /></td>
-        <td><input class="cell-input cell-num" data-field="investment" type="number" step="0.01" value="${entry.investment || ""}" placeholder="0" /></td>
+        <td><input class="cell-input cell-num" data-field="investment" type="text" inputmode="decimal" value="${entry.investment || ""}" placeholder="0" /></td>
         <td class="cell-result${hit ? " is-hit" : ""}">${getResultText(entry)}</td>
-        <td><input class="cell-input cell-num" data-field="prize" type="number" step="0.01" value="${entry.prize !== 0 ? entry.prize : ""}" placeholder="0" /></td>
+        <td><input class="cell-input cell-num" data-field="prize" type="text" inputmode="decimal" value="${entry.prize !== 0 ? entry.prize : ""}" placeholder="0" /></td>
         <td class="cell-profit">${formatNum(profit)}</td>
         <td class="cell-cumulative">${formatNum(cumulative.get(entry.id) ?? 0)}</td>
         <td><button class="delete-btn" type="button" title="删除">×</button></td>

@@ -20,12 +20,15 @@
 
 html, body {
   width: 100%;
+  max-width: 100vw;
   height: 100%;
   overflow: hidden;
   overflow-x: hidden;
   overscroll-behavior: none;
   -webkit-text-size-adjust: 100%;
   touch-action: manipulation;
+  position: fixed;
+  inset: 0;
 }
 
 body {
@@ -58,16 +61,17 @@ button {
   display: flex;
   flex-direction: column;
   width: 100%;
-  max-width: 100%;
+  max-width: 100vw;
   height: 100%;
   height: 100dvh;
-  margin: 0 auto;
+  margin: 0;
   overflow: hidden;
   background: var(--white);
 }
 
 .main-content {
   flex: 1;
+  min-width: 0;
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -75,6 +79,7 @@ button {
 
 .view-panel {
   flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -85,8 +90,10 @@ button {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 16px;
+  padding: 12px 12px;
   border-bottom: 1px solid var(--line);
+  flex-shrink: 0;
+  min-width: 0;
 }
 
 .page-header h1 {
@@ -109,16 +116,25 @@ button {
 
 .table-wrap {
   flex: 1;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
   overflow-x: hidden;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
+  touch-action: pan-y;
 }
 
 .ledger-table {
   width: 100%;
+  max-width: 100%;
   table-layout: fixed;
   border-collapse: collapse;
+}
+
+.ledger-table col {
+  width: calc(100% / 7);
 }
 
 .ledger-table thead tr {
@@ -130,32 +146,25 @@ button {
 }
 
 .ledger-table th {
-  padding: 8px 2px;
-  font-size: 11px;
+  padding: 6px 0;
+  font-size: 10px;
   font-weight: 600;
   text-align: center;
-  white-space: nowrap;
+  white-space: normal;
+  line-height: 1.2;
+  word-break: keep-all;
   overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.ledger-table th,
-.ledger-table td {
-  width: calc(100% / 7);
-}
-
-.ledger-table th:first-child {
-  padding-left: 2px;
 }
 
 .ledger-table td {
-  padding: 4px 1px;
+  padding: 3px 0;
   text-align: center;
   border-bottom: 1px solid var(--line);
   vertical-align: middle;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  min-width: 0;
 }
 
 .ledger-table tbody tr:nth-child(even) {
@@ -167,16 +176,30 @@ button {
 }
 
 .cell-input {
+  display: block;
   width: 100%;
   min-width: 0;
   max-width: 100%;
   border: 1px solid transparent;
   border-radius: 4px;
-  padding: 4px 1px;
+  padding: 2px 0;
   text-align: center;
   background: transparent;
-  font-size: 12px;
+  font-size: 11px;
   color: var(--text);
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.cell-num {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+.cell-num::-webkit-inner-spin-button,
+.cell-num::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
 }
 
 .cell-input:focus {
@@ -188,20 +211,18 @@ button {
 .cell-result {
   font-weight: 600;
   color: var(--text);
-  font-size: 12px;
+  font-size: 10px;
+}
+
+.cell-profit,
+.cell-cumulative {
+  font-weight: 600;
+  color: var(--text);
+  font-size: 10px;
 }
 
 .cell-result.is-hit {
   color: var(--red);
-}
-
-.cell-profit {
-  color: var(--text);
-}
-
-.cell-cumulative {
-  font-weight: 600;
-  color: var(--text);
 }
 
 .cell-prize {
@@ -210,10 +231,11 @@ button {
 
 .delete-btn {
   color: var(--muted);
-  font-size: 18px;
+  font-size: 16px;
   line-height: 1;
-  padding: 2px 6px;
+  padding: 0;
   border-radius: 4px;
+  width: 100%;
 }
 
 .delete-btn:active {
@@ -235,6 +257,7 @@ button {
   padding: 10px 12px;
   overflow: hidden;
   flex-shrink: 0;
+  min-width: 0;
 }
 
 .range-btn {
@@ -255,8 +278,9 @@ button {
 
 .chart-card {
   flex: 1;
+  min-width: 0;
   position: relative;
-  margin: 0 12px;
+  margin: 0 8px;
   min-height: 220px;
   border: 1px solid var(--line);
   border-radius: 10px;
@@ -282,9 +306,10 @@ button {
 
 .chart-summary {
   display: flex;
-  gap: 12px;
-  padding: 12px 16px;
+  gap: 8px;
+  padding: 12px 8px;
   flex-shrink: 0;
+  min-width: 0;
 }
 
 .summary-item {
