@@ -29,9 +29,26 @@
   init();
 
   function init() {
+    bindMobileLock();
     loadData();
     bindEvents();
     render();
+  }
+
+  function bindMobileLock() {
+    ["gesturestart", "gesturechange", "gestureend"].forEach((eventName) => {
+      document.addEventListener(eventName, (e) => e.preventDefault(), { passive: false });
+    });
+
+    document.addEventListener(
+      "touchmove",
+      (e) => {
+        if (e.touches.length > 1) e.preventDefault();
+      },
+      { passive: false }
+    );
+
+    document.addEventListener("dblclick", (e) => e.preventDefault());
   }
 
   function bindEvents() {
@@ -78,10 +95,14 @@
 
   function normalizeEntries(entries) {
     return entries.map((entry) => {
-      if (entry.profit !== undefined) return entry;
       const investment = toNumber(entry.investment);
-      const prize = toNumber(entry.prize);
-      return { ...entry, profit: prize - investment };
+      if (entry.prize !== undefined) {
+        return { ...entry, investment, prize: toNumber(entry.prize) };
+      }
+      if (entry.profit !== undefined) {
+        return { ...entry, investment, prize: investment + toNumber(entry.profit) };
+      }
+      return { ...entry, investment, prize: 0 };
     });
   }
 
@@ -119,16 +140,16 @@
     return Number.isFinite(n) ? n : 0;
   }
 
-  function calcPrize(entry) {
-    return entry.investment + getProfit(entry);
+  function getPrize(entry) {
+    return toNumber(entry.prize);
   }
 
   function getProfit(entry) {
-    return toNumber(entry.profit);
+    return getPrize(entry) - toNumber(entry.investment);
   }
 
   function isHit(entry) {
-    return getProfit(entry) > entry.investment;
+    return getPrize(entry) > 0;
   }
 
   function getResultText(entry) {
@@ -162,7 +183,7 @@
       id: createId(),
       date: formatDateLabel(new Date()),
       investment: 0,
-      profit: 0,
+      prize: 0,
     };
     state.entries.unshift(entry);
     saveData();
@@ -182,7 +203,7 @@
   function updateEntry(id, field, value) {
     const entry = state.entries.find((e) => e.id === id);
     if (!entry) return;
-    if (field === "investment" || field === "profit") {
+    if (field === "investment" || field === "prize") {
       entry[field] = toNumber(value);
     } else {
       entry[field] = value;
@@ -203,7 +224,6 @@
 
     sorted.forEach((entry) => {
       const profit = getProfit(entry);
-      const prize = calcPrize(entry);
       const hit = isHit(entry);
       const row = document.createElement("tr");
       row.dataset.id = entry.id;
@@ -212,8 +232,8 @@
         <td><input class="cell-input" data-field="date" value="${esc(entry.date)}" /></td>
         <td><input class="cell-input cell-num" data-field="investment" type="number" step="0.01" value="${entry.investment || ""}" placeholder="0" /></td>
         <td class="cell-result${hit ? " is-hit" : ""}">${getResultText(entry)}</td>
-        <td class="cell-prize">${formatNum(prize)}</td>
-        <td><input class="cell-input cell-num" data-field="profit" type="number" step="0.01" value="${entry.profit !== 0 ? entry.profit : ""}" placeholder="0" /></td>
+        <td><input class="cell-input cell-num" data-field="prize" type="number" step="0.01" value="${entry.prize !== 0 ? entry.prize : ""}" placeholder="0" /></td>
+        <td class="cell-profit">${formatNum(profit)}</td>
         <td class="cell-cumulative">${formatNum(cumulative.get(entry.id) ?? 0)}</td>
         <td><button class="delete-btn" type="button" title="删除">×</button></td>
       `;

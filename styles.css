@@ -19,8 +19,13 @@
 }
 
 html, body {
+  width: 100%;
   height: 100%;
   overflow: hidden;
+  overflow-x: hidden;
+  overscroll-behavior: none;
+  -webkit-text-size-adjust: 100%;
+  touch-action: manipulation;
 }
 
 body {
@@ -28,16 +33,21 @@ body {
   font-size: 13px;
   color: var(--text);
   background: var(--bg);
+  -webkit-tap-highlight-color: transparent;
+  -webkit-overflow-scrolling: touch;
 }
 
-button, input {
+button, input, select, textarea {
   font: inherit;
+  touch-action: manipulation;
 }
 
 button {
   cursor: pointer;
   border: none;
   background: none;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .hidden {
@@ -47,9 +57,12 @@ button {
 .app-shell {
   display: flex;
   flex-direction: column;
+  width: 100%;
+  max-width: 100%;
   height: 100%;
-  max-width: 800px;
+  height: 100dvh;
   margin: 0 auto;
+  overflow: hidden;
   background: var(--white);
 }
 
@@ -96,14 +109,16 @@ button {
 
 .table-wrap {
   flex: 1;
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
   -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
 }
 
 .ledger-table {
   width: 100%;
+  table-layout: fixed;
   border-collapse: collapse;
-  min-width: 460px;
 }
 
 .ledger-table thead tr {
@@ -115,22 +130,32 @@ button {
 }
 
 .ledger-table th {
-  padding: 8px 4px;
-  font-size: 12px;
+  padding: 8px 2px;
+  font-size: 11px;
   font-weight: 600;
   text-align: center;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ledger-table th,
+.ledger-table td {
+  width: calc(100% / 7);
 }
 
 .ledger-table th:first-child {
-  padding-left: 8px;
+  padding-left: 2px;
 }
 
 .ledger-table td {
-  padding: 4px 2px;
+  padding: 4px 1px;
   text-align: center;
   border-bottom: 1px solid var(--line);
   vertical-align: middle;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .ledger-table tbody tr:nth-child(even) {
@@ -144,9 +169,10 @@ button {
 .cell-input {
   width: 100%;
   min-width: 0;
+  max-width: 100%;
   border: 1px solid transparent;
   border-radius: 4px;
-  padding: 4px 2px;
+  padding: 4px 1px;
   text-align: center;
   background: transparent;
   font-size: 12px;
@@ -204,18 +230,19 @@ button {
 /* 折线图页 */
 .chart-range-bar {
   display: flex;
+  flex-wrap: wrap;
   gap: 6px;
   padding: 10px 12px;
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
+  overflow: hidden;
   flex-shrink: 0;
 }
 
 .range-btn {
-  flex-shrink: 0;
-  padding: 5px 12px;
+  flex: 1 1 calc(33.33% - 6px);
+  min-width: 0;
+  padding: 5px 8px;
   border-radius: 16px;
-  font-size: 12px;
+  font-size: 11px;
   color: var(--muted);
   background: #f0f0f0;
   font-weight: 500;
@@ -331,12 +358,22 @@ button {
 @media (max-width: 480px) {
   .ledger-table th,
   .ledger-table td {
-    font-size: 11px;
-    padding: 3px 1px;
+    font-size: 10px;
+    padding: 3px 0;
   }
 
   .cell-input {
     font-size: 11px;
-    padding: 3px 1px;
+    padding: 3px 0;
+  }
+
+  .page-header h1 {
+    font-size: 16px;
+  }
+
+  .range-btn {
+    flex: 1 1 calc(50% - 6px);
+    font-size: 10px;
+    padding: 5px 6px;
   }
 }
