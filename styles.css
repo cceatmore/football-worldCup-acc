@@ -208,6 +208,19 @@ button {
   background: var(--white);
 }
 
+.ledger-table tbody tr.is-hit,
+.ledger-table tbody tr.is-hit .cell-input,
+.ledger-table tbody tr.is-hit .cell-profit,
+.ledger-table tbody tr.is-hit .cell-cumulative,
+.ledger-table tbody tr.is-hit .cell-result,
+.ledger-table tbody tr.is-hit .delete-btn {
+  color: var(--red);
+}
+
+.ledger-table tbody tr.is-hit .cell-input:focus {
+  color: var(--red);
+}
+
 .cell-result {
   font-weight: 600;
   color: var(--text);
@@ -221,9 +234,6 @@ button {
   font-size: 10px;
 }
 
-.cell-result.is-hit {
-  color: var(--red);
-}
 
 .cell-prize {
   font-size: 12px;

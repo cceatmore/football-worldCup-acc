@@ -185,7 +185,7 @@
       investment: 0,
       prize: 0,
     };
-    state.entries.unshift(entry);
+    state.entries.push(entry);
     saveData();
     render();
     const input = els.ledgerBody.querySelector(`tr[data-id="${entry.id}"] [data-field="date"]`);
@@ -214,7 +214,7 @@
 
   function render() {
     const cumulative = getCumulativeMap();
-    const sorted = getSortedEntries().reverse();
+    const sorted = getSortedEntries();
 
     els.ledgerBody.innerHTML = "";
     els.emptyState.classList.toggle("hidden", sorted.length > 0);
@@ -224,14 +224,14 @@
 
     sorted.forEach((entry) => {
       const profit = getProfit(entry);
-      const hit = isHit(entry);
       const row = document.createElement("tr");
       row.dataset.id = entry.id;
+      if (profit > 0) row.classList.add("is-hit");
 
       row.innerHTML = `
         <td><input class="cell-input" data-field="date" value="${esc(entry.date)}" /></td>
         <td><input class="cell-input cell-num" data-field="investment" type="text" inputmode="decimal" value="${entry.investment || ""}" placeholder="0" /></td>
-        <td class="cell-result${hit ? " is-hit" : ""}">${getResultText(entry)}</td>
+        <td class="cell-result">${getResultText(entry)}</td>
         <td><input class="cell-input cell-num" data-field="prize" type="text" inputmode="decimal" value="${entry.prize !== 0 ? entry.prize : ""}" placeholder="0" /></td>
         <td class="cell-profit">${formatNum(profit)}</td>
         <td class="cell-cumulative">${formatNum(cumulative.get(entry.id) ?? 0)}</td>
