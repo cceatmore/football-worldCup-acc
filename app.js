@@ -3,6 +3,7 @@
 
   const STORAGE_KEY = "football-ledger-simple-v1";
   const DEFAULT_BASE_TOTAL = -10000;
+  const { toNumber, getPrize, getProfit, computeRunningTotals, createEntryFromInvestment } = window.Ledger;
 
   const state = {
     baseTotal: DEFAULT_BASE_TOTAL,
@@ -17,6 +18,9 @@
     ledgerBody: document.querySelector("#ledger-body"),
     emptyState: document.querySelector("#empty-state"),
     addEntryBtn: document.querySelector("#add-entry-btn"),
+    addModal: document.querySelector("#add-modal"),
+    addInvestmentInput: document.querySelector("#add-investment-input"),
+    addConfirmBtn: document.querySelector("#add-confirm-btn"),
     tabLedger: document.querySelector("#tab-ledger"),
     tabChart: document.querySelector("#tab-chart"),
     chartCanvas: document.querySelector("#profit-chart"),
@@ -52,7 +56,17 @@
   }
 
   function bindEvents() {
-    els.addEntryBtn.addEventListener("click", addEntry);
+    els.addEntryBtn.addEventListener("click", openAddModal);
+    els.addConfirmBtn.addEventListener("click", confirmAddEntry);
+    els.addModal.querySelectorAll("[data-close-modal]").forEach((el) => {
+      el.addEventListener("click", closeAddModal);
+    });
+    els.addInvestmentInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        confirmAddEntry();
+      }
+    });
     els.tabLedger.addEventListener("click", () => switchTab("ledger"));
     els.tabChart.addEventListener("click", () => switchTab("chart"));
     els.rangeBtns.forEach((btn) => {
@@ -95,14 +109,15 @@
 
   function normalizeEntries(entries) {
     return entries.map((entry) => {
+      const id = entry.id || createId();
       const investment = toNumber(entry.investment);
       if (entry.prize !== undefined) {
-        return { ...entry, investment, prize: toNumber(entry.prize) };
+        return { ...entry, id, investment, prize: toNumber(entry.prize) };
       }
       if (entry.profit !== undefined) {
-        return { ...entry, investment, prize: investment + toNumber(entry.profit) };
+        return { ...entry, id, investment, prize: investment + toNumber(entry.profit) };
       }
-      return { ...entry, investment, prize: 0 };
+      return { ...entry, id, investment, prize: 0 };
     });
   }
 
@@ -135,17 +150,12 @@
     return date;
   }
 
-  function toNumber(value) {
-    const n = Number(String(value).replace(/,/g, ""));
-    return Number.isFinite(n) ? n : 0;
-  }
-
-  function getPrize(entry) {
-    return toNumber(entry.prize);
-  }
-
-  function getProfit(entry) {
-    return getPrize(entry) - toNumber(entry.investment);
+  function getCumulativeMap() {
+    const sorted = getSortedEntries();
+    const totals = computeRunningTotals(state.baseTotal, sorted);
+    const map = new Map();
+    sorted.forEach((entry, i) => map.set(entry.id, totals[i]));
+    return map;
   }
 
   function isHit(entry) {
@@ -164,33 +174,36 @@
     });
   }
 
-  function getCumulativeMap() {
-    const map = new Map();
-    let total = state.baseTotal;
-    getSortedEntries().forEach((entry) => {
-      total += getProfit(entry);
-      map.set(entry.id, total);
-    });
-    return map;
-  }
-
   function getFinalTotal() {
-    return state.baseTotal + getSortedEntries().reduce((sum, entry) => sum + getProfit(entry), 0);
+    const sorted = getSortedEntries();
+    const totals = computeRunningTotals(state.baseTotal, sorted);
+    return totals.length ? totals[totals.length - 1] : state.baseTotal;
   }
 
-  function addEntry() {
+  function openAddModal() {
+    els.addInvestmentInput.value = "";
+    els.addModal.classList.remove("hidden");
+    requestAnimationFrame(() => els.addInvestmentInput.focus());
+  }
+
+  function closeAddModal() {
+    els.addModal.classList.add("hidden");
+  }
+
+  function confirmAddEntry() {
+    const raw = els.addInvestmentInput.value.trim();
+    if (!raw) {
+      els.addInvestmentInput.focus();
+      return;
+    }
     const entry = {
       id: createId(),
-      date: formatDateLabel(new Date()),
-      investment: 0,
-      prize: 0,
+      ...createEntryFromInvestment(raw, formatDateLabel(new Date())),
     };
     state.entries.push(entry);
     saveData();
+    closeAddModal();
     render();
-    const input = els.ledgerBody.querySelector(`tr[data-id="${entry.id}"] [data-field="date"]`);
-    input?.focus();
-    input?.select();
   }
 
   function deleteEntry(id) {
@@ -200,7 +213,7 @@
     render();
   }
 
-  function updateEntry(id, field, value) {
+  function updateEntry(id, field, value, options = {}) {
     const entry = state.entries.find((e) => e.id === id);
     if (!entry) return;
     if (field === "investment" || field === "prize") {
@@ -208,8 +221,28 @@
     } else {
       entry[field] = value;
     }
-    saveData();
-    render();
+    if (!options.skipSave) saveData();
+    if (field === "date") {
+      render();
+      return;
+    }
+    updateComputedCells();
+  }
+
+  function updateComputedCells() {
+    const cumulative = getCumulativeMap();
+    els.ledgerBody.querySelectorAll("tr[data-id]").forEach((row) => {
+      const entry = state.entries.find((e) => e.id === row.dataset.id);
+      if (!entry) return;
+      const profit = getProfit(entry);
+      row.classList.toggle("is-hit", profit > 0);
+      const resultCell = row.querySelector(".cell-result");
+      const profitCell = row.querySelector(".cell-profit");
+      const totalCell = row.querySelector(".cell-cumulative");
+      if (resultCell) resultCell.textContent = getResultText(entry);
+      if (profitCell) profitCell.textContent = formatNum(profit);
+      if (totalCell) totalCell.textContent = formatNum(cumulative.get(entry.id) ?? 0);
+    });
   }
 
   function render() {
@@ -248,6 +281,11 @@
   function bindRowEvents(row, entry) {
     row.querySelectorAll("[data-field]").forEach((input) => {
       const field = input.dataset.field;
+      input.addEventListener("input", (e) => {
+        if (field === "investment" || field === "prize") {
+          updateEntry(entry.id, field, e.target.value, { skipSave: true });
+        }
+      });
       input.addEventListener("change", (e) => {
         const value = field === "date" ? e.target.value.trim() : e.target.value;
         updateEntry(entry.id, field, value);
