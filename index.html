@@ -10,8 +10,8 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="mobile-web-app-capable" content="yes" />
-    <title>足球彩票盈亏记账</title>
-    <link rel="stylesheet" href="./styles.css?v=6" />
+    <title>盈亏记账</title>
+    <link rel="stylesheet" href="./styles.css?v=7" />
   </head>
   <body>
     <div class="app-shell">
@@ -19,8 +19,13 @@
         <!-- 记账页 -->
         <section id="ledger-view" class="view-panel">
           <header class="page-header">
-            <h1>盈亏记账</h1>
-            <button id="add-entry-btn" class="add-btn" type="button">+ 新增</button>
+            <h1 id="app-title">盈亏记账</h1>
+            <div class="header-actions">
+              <button id="settings-btn" class="icon-btn" type="button" title="系统设置" aria-label="系统设置">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.14 12.94c.04-.31.06-.63.06-.94s-.02-.63-.06-.94l2.03-1.58a.5.5 0 0 0 .12-.64l-1.92-3.32a.5.5 0 0 0-.6-.22l-2.39.96a7.03 7.03 0 0 0-1.63-.94l-.36-2.54A.5.5 0 0 0 13.9 2h-3.8a.5.5 0 0 0-.49.42l-.36 2.54c-.59.24-1.13.55-1.63.94l-2.39-.96a.5.5 0 0 0-.6.22L2.71 8.48a.5.5 0 0 0 .12.64L4.86 10.7c-.04.31-.06.63-.06.94s.02.63.06.94l-2.03 1.58a.5.5 0 0 0-.12.64l1.92 3.32c.13.23.4.32.64.22l2.39-.96c.5.39 1.04.7 1.63.94l.36 2.54c.05.24.25.42.49.42h3.8c.24 0 .44-.18.49-.42l.36-2.54c.59-.24 1.13-.55 1.63-.94l2.39.96c.23.1.5 0 .64-.22l1.92-3.32a.5.5 0 0 0-.12-.64l-2.03-1.58zM12 15.5A3.5 3.5 0 1 1 12 8.5a3.5 3.5 0 0 1 0 7z"/></svg>
+              </button>
+              <button id="add-entry-btn" class="add-btn" type="button">+ 新增</button>
+            </div>
           </header>
 
           <div class="table-wrap">
@@ -114,7 +119,36 @@
       </div>
     </div>
 
-    <script src="./ledger.js?v=6"></script>
-    <script src="./app.js?v=6"></script>
+    <div id="settings-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="settings-modal-title">
+      <div class="modal-backdrop" data-close-settings></div>
+      <div class="modal-card">
+        <h2 id="settings-modal-title">系统设置</h2>
+        <label class="modal-field" for="settings-title-input">
+          <span>标题</span>
+          <input id="settings-title-input" type="text" maxlength="20" placeholder="盈亏记账" autocomplete="off" />
+        </label>
+        <div class="modal-field">
+          <span>主题色</span>
+          <div class="theme-row">
+            <input id="settings-color-input" type="color" value="#e91e8c" />
+            <div class="color-presets" role="group" aria-label="预设主题色">
+              <button type="button" class="color-swatch" data-color="#e91e8c" style="background:#e91e8c" title="粉"></button>
+              <button type="button" class="color-swatch" data-color="#e53935" style="background:#e53935" title="红"></button>
+              <button type="button" class="color-swatch" data-color="#fb8c00" style="background:#fb8c00" title="橙"></button>
+              <button type="button" class="color-swatch" data-color="#43a047" style="background:#43a047" title="绿"></button>
+              <button type="button" class="color-swatch" data-color="#1a73e8" style="background:#1a73e8" title="蓝"></button>
+              <button type="button" class="color-swatch" data-color="#7b1fa2" style="background:#7b1fa2" title="紫"></button>
+            </div>
+          </div>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="modal-btn cancel" data-close-settings>取消</button>
+          <button type="button" class="modal-btn confirm" id="settings-confirm-btn">确定</button>
+        </div>
+      </div>
+    </div>
+
+    <script src="./ledger.js?v=7"></script>
+    <script src="./app.js?v=7"></script>
   </body>
 </html>

@@ -7,6 +7,8 @@ const {
   getFoldSegments,
   toggleFold,
   getFoldSummary,
+  normalizeSettings,
+  themeFromColor,
 } = require("./ledger.js");
 
 test("修改中间行奖金后，最后一行总计必须按全部净赚重算", () => {
@@ -133,4 +135,21 @@ test("折叠条摘要包含时间、数量和该段结束时的总计", () => {
   assert.equal(summary.time, "7.28 – 7.30");
   assert.equal(summary.count, 2);
   assert.equal(summary.total, -14000);
+});
+
+test("系统设置会规范化标题和主题色", () => {
+  assert.deepEqual(normalizeSettings({}), { title: "盈亏记账", themeColor: "#e91e8c" });
+  assert.equal(normalizeSettings({ title: "  世界杯记账  " }).title, "世界杯记账");
+  assert.equal(normalizeSettings({ title: "" }).title, "盈亏记账");
+  assert.equal(normalizeSettings({ themeColor: "1A73E8" }).themeColor, "#1a73e8");
+  assert.equal(normalizeSettings({ themeColor: "#abc" }).themeColor, "#e91e8c");
+});
+
+test("主题色会生成深色和浅色配套色", () => {
+  const theme = themeFromColor("#e91e8c");
+  assert.equal(theme.color, "#e91e8c");
+  assert.match(theme.dark, /^#[0-9a-f]{6}$/);
+  assert.match(theme.light, /^#[0-9a-f]{6}$/);
+  assert.notEqual(theme.dark, theme.color);
+  assert.notEqual(theme.light, theme.color);
 });

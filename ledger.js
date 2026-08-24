@@ -96,6 +96,51 @@
     return segments;
   }
 
+  const DEFAULT_TITLE = "盈亏记账";
+  const DEFAULT_THEME_COLOR = "#e91e8c";
+
+  function normalizeHexColor(value, fallback = DEFAULT_THEME_COLOR) {
+    const match = String(value || "")
+      .trim()
+      .match(/^#?([0-9a-fA-F]{6})$/);
+    return match ? `#${match[1].toLowerCase()}` : fallback;
+  }
+
+  function hexToRgb(hex) {
+    const n = normalizeHexColor(hex).slice(1);
+    return {
+      r: parseInt(n.slice(0, 2), 16),
+      g: parseInt(n.slice(2, 4), 16),
+      b: parseInt(n.slice(4, 6), 16),
+    };
+  }
+
+  function mixHex(hex, target, ratio) {
+    const a = hexToRgb(hex);
+    const t = hexToRgb(target);
+    const mix = (from, to) => Math.round(from + (to - from) * ratio);
+    return `#${[mix(a.r, t.r), mix(a.g, t.g), mix(a.b, t.b)]
+      .map((v) => v.toString(16).padStart(2, "0"))
+      .join("")}`;
+  }
+
+  function themeFromColor(hex) {
+    const color = normalizeHexColor(hex);
+    return {
+      color,
+      dark: mixHex(color, "#000000", 0.18),
+      light: mixHex(color, "#ffffff", 0.85),
+    };
+  }
+
+  function normalizeSettings(raw) {
+    const title = String(raw?.title ?? DEFAULT_TITLE).trim().slice(0, 20);
+    return {
+      title: title || DEFAULT_TITLE,
+      themeColor: normalizeHexColor(raw?.themeColor),
+    };
+  }
+
   function getFoldSummary(segment, runningTotalAtEnd) {
     const from = segment?.from ?? "";
     const to = segment?.to ?? "";
@@ -117,5 +162,9 @@
     toggleFold,
     getFoldSegments,
     getFoldSummary,
+    normalizeSettings,
+    themeFromColor,
+    DEFAULT_TITLE,
+    DEFAULT_THEME_COLOR,
   };
 });

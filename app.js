@@ -14,12 +14,18 @@
     toggleFold,
     getFoldSegments,
     getFoldSummary,
+    normalizeSettings,
+    themeFromColor,
+    DEFAULT_TITLE,
+    DEFAULT_THEME_COLOR,
   } = window.Ledger;
 
   const state = {
     baseTotal: DEFAULT_BASE_TOTAL,
     entries: [],
     foldedBefore: [],
+    title: DEFAULT_TITLE,
+    themeColor: DEFAULT_THEME_COLOR,
     activeTab: "ledger",
     chartRange: "week",
   };
@@ -33,6 +39,12 @@
     addModal: document.querySelector("#add-modal"),
     addInvestmentInput: document.querySelector("#add-investment-input"),
     addConfirmBtn: document.querySelector("#add-confirm-btn"),
+    appTitle: document.querySelector("#app-title"),
+    settingsBtn: document.querySelector("#settings-btn"),
+    settingsModal: document.querySelector("#settings-modal"),
+    settingsTitleInput: document.querySelector("#settings-title-input"),
+    settingsColorInput: document.querySelector("#settings-color-input"),
+    settingsConfirmBtn: document.querySelector("#settings-confirm-btn"),
     tabLedger: document.querySelector("#tab-ledger"),
     tabChart: document.querySelector("#tab-chart"),
     chartCanvas: document.querySelector("#profit-chart"),
@@ -47,6 +59,7 @@
   function init() {
     bindMobileLock();
     loadData();
+    applySettings();
     bindEvents();
     render();
   }
@@ -78,6 +91,28 @@
         e.preventDefault();
         confirmAddEntry();
       }
+    });
+    els.settingsBtn.addEventListener("click", openSettingsModal);
+    els.settingsConfirmBtn.addEventListener("click", confirmSettings);
+    els.settingsModal.querySelectorAll("[data-close-settings]").forEach((el) => {
+      el.addEventListener("click", closeSettingsModal);
+    });
+    els.settingsTitleInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        confirmSettings();
+      }
+    });
+    els.settingsColorInput.addEventListener("input", (e) => {
+      previewTheme(e.target.value);
+      markActivePreset(e.target.value);
+    });
+    els.settingsModal.querySelectorAll(".color-swatch").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        els.settingsColorInput.value = btn.dataset.color;
+        previewTheme(btn.dataset.color);
+        markActivePreset(btn.dataset.color);
+      });
     });
     els.tabLedger.addEventListener("click", () => switchTab("ledger"));
     els.tabChart.addEventListener("click", () => switchTab("chart"));
@@ -111,6 +146,7 @@
         state.baseTotal = raw.baseTotal !== undefined ? toNumber(raw.baseTotal) : DEFAULT_BASE_TOTAL;
         state.entries = normalizeEntries(raw.entries);
         state.foldedBefore = normalizeFoldedBefore(raw.foldedBefore);
+        applyStoredSettings(raw);
         return;
       }
       if (Array.isArray(raw)) {
@@ -135,6 +171,64 @@
     });
   }
 
+  function applyStoredSettings(raw) {
+    const settings = normalizeSettings(raw);
+    state.title = settings.title;
+    state.themeColor = settings.themeColor;
+  }
+
+  function applyTheme(hex) {
+    const theme = themeFromColor(hex);
+    const root = document.documentElement;
+    root.style.setProperty("--pink", theme.color);
+    root.style.setProperty("--pink-dark", theme.dark);
+    root.style.setProperty("--pink-light", theme.light);
+    return theme;
+  }
+
+  function applySettings() {
+    applyTheme(state.themeColor);
+    if (els.appTitle) els.appTitle.textContent = state.title;
+    document.title = state.title;
+  }
+
+  function previewTheme(hex) {
+    applyTheme(hex);
+  }
+
+  function markActivePreset(hex) {
+    const color = normalizeSettings({ themeColor: hex }).themeColor;
+    els.settingsModal.querySelectorAll(".color-swatch").forEach((btn) => {
+      btn.classList.toggle("is-on", btn.dataset.color === color);
+    });
+  }
+
+  function openSettingsModal() {
+    els.settingsTitleInput.value = state.title;
+    els.settingsColorInput.value = state.themeColor;
+    markActivePreset(state.themeColor);
+    els.settingsModal.classList.remove("hidden");
+    requestAnimationFrame(() => els.settingsTitleInput.focus());
+  }
+
+  function closeSettingsModal() {
+    els.settingsModal.classList.add("hidden");
+    applySettings();
+  }
+
+  function confirmSettings() {
+    const settings = normalizeSettings({
+      title: els.settingsTitleInput.value,
+      themeColor: els.settingsColorInput.value,
+    });
+    state.title = settings.title;
+    state.themeColor = settings.themeColor;
+    saveData();
+    applySettings();
+    els.settingsModal.classList.add("hidden");
+    if (state.activeTab === "chart") renderChart();
+  }
+
   function saveData() {
     localStorage.setItem(
       STORAGE_KEY,
@@ -142,6 +236,8 @@
         baseTotal: state.baseTotal,
         entries: state.entries,
         foldedBefore: state.foldedBefore,
+        title: state.title,
+        themeColor: state.themeColor,
       })
     );
   }
@@ -442,7 +538,7 @@
       ctx.setLineDash([]);
     }
 
-    ctx.strokeStyle = "#e91e8c";
+    ctx.strokeStyle = state.themeColor;
     ctx.lineWidth = 2;
     ctx.lineJoin = "round";
     ctx.beginPath();
@@ -457,7 +553,7 @@
     points.forEach((p, i) => {
       const x = toX(i);
       const y = toY(p.value);
-      ctx.fillStyle = "#e91e8c";
+      ctx.fillStyle = state.themeColor;
       ctx.beginPath();
       ctx.arc(x, y, 4, 0, Math.PI * 2);
       ctx.fill();
