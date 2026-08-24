@@ -3,11 +3,23 @@
 
   const STORAGE_KEY = "football-ledger-simple-v1";
   const DEFAULT_BASE_TOTAL = -10000;
-  const { toNumber, getPrize, getProfit, computeRunningTotals, createEntryFromInvestment } = window.Ledger;
+  const {
+    toNumber,
+    getPrize,
+    getProfit,
+    computeRunningTotals,
+    createEntryFromInvestment,
+    parseEntryDate,
+    normalizeFoldedBefore,
+    toggleFold,
+    getFoldSegments,
+    getFoldSummary,
+  } = window.Ledger;
 
   const state = {
     baseTotal: DEFAULT_BASE_TOTAL,
     entries: [],
+    foldedBefore: [],
     activeTab: "ledger",
     chartRange: "week",
   };
@@ -98,11 +110,13 @@
       if (raw?.entries) {
         state.baseTotal = raw.baseTotal !== undefined ? toNumber(raw.baseTotal) : DEFAULT_BASE_TOTAL;
         state.entries = normalizeEntries(raw.entries);
+        state.foldedBefore = normalizeFoldedBefore(raw.foldedBefore);
         return;
       }
       if (Array.isArray(raw)) {
         state.baseTotal = DEFAULT_BASE_TOTAL;
         state.entries = normalizeEntries(raw);
+        state.foldedBefore = [];
       }
     } catch (_) {}
   }
@@ -124,7 +138,11 @@
   function saveData() {
     localStorage.setItem(
       STORAGE_KEY,
-      JSON.stringify({ baseTotal: state.baseTotal, entries: state.entries })
+      JSON.stringify({
+        baseTotal: state.baseTotal,
+        entries: state.entries,
+        foldedBefore: state.foldedBefore,
+      })
     );
   }
 
@@ -137,17 +155,6 @@
     const d = date.getDate();
     const h = date.getHours();
     return h >= 18 ? `${m}.${d}晚` : `${m}.${d}`;
-  }
-
-  function parseEntryDate(label) {
-    const match = String(label).match(/^(\d{1,2})\.(\d{1,2})(晚)?$/);
-    if (!match) return null;
-    const year = new Date().getFullYear();
-    const month = Number(match[1]) - 1;
-    const day = Number(match[2]);
-    const date = new Date(year, month, day);
-    if (match[3]) date.setHours(20, 0, 0, 0);
-    return date;
   }
 
   function getCumulativeMap() {
@@ -245,6 +252,70 @@
     });
   }
 
+  function canFoldAt(sorted, date) {
+    const cutoff = parseEntryDate(date)?.getTime() ?? 0;
+    return sorted.some((entry) => (parseEntryDate(entry.date)?.getTime() ?? 0) < cutoff);
+  }
+
+  function toggleFoldAt(key) {
+    state.foldedBefore = toggleFold(state.foldedBefore, key);
+    saveData();
+    render();
+  }
+
+  function renderFoldRow(segment, cumulative) {
+    const last = segment.entries[segment.entries.length - 1];
+    const summary = getFoldSummary(segment, cumulative.get(last.id) ?? 0);
+    const row = document.createElement("tr");
+    row.className = "fold-row";
+    row.innerHTML = `
+      <td colspan="7">
+        <button type="button" class="fold-summary" data-fold-key="${esc(segment.key)}">
+          <span class="fold-arrow">▶</span>
+          <span class="fold-item"><em>时间</em>${esc(summary.time)}</span>
+          <span class="fold-item"><em>数量</em>${summary.count}</span>
+          <span class="fold-item fold-total"><em>总计</em>${formatNum(summary.total)}</span>
+        </button>
+      </td>
+    `;
+    row.querySelector(".fold-summary").addEventListener("click", () => toggleFoldAt(segment.key));
+    els.ledgerBody.appendChild(row);
+  }
+
+  function renderEntryRow(entry, cumulative, sorted, showFoldBtn) {
+    const profit = getProfit(entry);
+    const row = document.createElement("tr");
+    row.dataset.id = entry.id;
+    if (profit > 0) row.classList.add("is-hit");
+    const folded = state.foldedBefore.includes(entry.date);
+
+    row.innerHTML = `
+      <td>
+        <div class="date-cell">
+          ${
+            showFoldBtn
+              ? `<button class="fold-btn${folded ? " is-on" : ""}" type="button" data-fold-key="${esc(entry.date)}" title="向上折叠 ${esc(entry.date)} 之前">▲</button>`
+              : `<span class="fold-spacer"></span>`
+          }
+          <input class="cell-input" data-field="date" value="${esc(entry.date)}" />
+        </div>
+      </td>
+      <td><input class="cell-input cell-num" data-field="investment" type="text" inputmode="decimal" value="${entry.investment || ""}" placeholder="0" /></td>
+      <td class="cell-result">${getResultText(entry)}</td>
+      <td><input class="cell-input cell-num" data-field="prize" type="text" inputmode="decimal" value="${entry.prize !== 0 ? entry.prize : ""}" placeholder="0" /></td>
+      <td class="cell-profit">${formatNum(profit)}</td>
+      <td class="cell-cumulative">${formatNum(cumulative.get(entry.id) ?? 0)}</td>
+      <td><button class="delete-btn" type="button" title="删除">×</button></td>
+    `;
+
+    bindRowEvents(row, entry);
+    row.querySelector(".fold-btn")?.addEventListener("click", (e) => {
+      e.preventDefault();
+      toggleFoldAt(entry.date);
+    });
+    els.ledgerBody.appendChild(row);
+  }
+
   function render() {
     const cumulative = getCumulativeMap();
     const sorted = getSortedEntries();
@@ -255,24 +326,16 @@
       els.emptyState.innerHTML = `<p>暂无记录，起始总计 ${formatNum(state.baseTotal)}</p><p>点击「新增」添加每日方案</p>`;
     }
 
-    sorted.forEach((entry) => {
-      const profit = getProfit(entry);
-      const row = document.createElement("tr");
-      row.dataset.id = entry.id;
-      if (profit > 0) row.classList.add("is-hit");
-
-      row.innerHTML = `
-        <td><input class="cell-input" data-field="date" value="${esc(entry.date)}" /></td>
-        <td><input class="cell-input cell-num" data-field="investment" type="text" inputmode="decimal" value="${entry.investment || ""}" placeholder="0" /></td>
-        <td class="cell-result">${getResultText(entry)}</td>
-        <td><input class="cell-input cell-num" data-field="prize" type="text" inputmode="decimal" value="${entry.prize !== 0 ? entry.prize : ""}" placeholder="0" /></td>
-        <td class="cell-profit">${formatNum(profit)}</td>
-        <td class="cell-cumulative">${formatNum(cumulative.get(entry.id) ?? 0)}</td>
-        <td><button class="delete-btn" type="button" title="删除">×</button></td>
-      `;
-
-      bindRowEvents(row, entry);
-      els.ledgerBody.appendChild(row);
+    const segments = getFoldSegments(sorted, state.foldedBefore);
+    segments.forEach((segment) => {
+      if (segment.type === "fold") {
+        renderFoldRow(segment, cumulative);
+        return;
+      }
+      segment.entries.forEach((entry, index) => {
+        const firstOfDate = index === 0 || entry.date !== segment.entries[index - 1].date;
+        renderEntryRow(entry, cumulative, sorted, firstOfDate && canFoldAt(sorted, entry.date));
+      });
     });
 
     if (state.activeTab === "chart") renderChart();

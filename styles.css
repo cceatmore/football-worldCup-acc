@@ -175,6 +175,75 @@ button {
   background: var(--white);
 }
 
+.date-cell {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-width: 0;
+}
+
+.fold-btn,
+.fold-spacer {
+  flex: 0 0 14px;
+  width: 14px;
+  height: 20px;
+  padding: 0;
+  color: var(--muted);
+  font-size: 9px;
+  line-height: 20px;
+}
+
+.fold-btn.is-on {
+  color: var(--pink);
+}
+
+.fold-row td {
+  padding: 0;
+  overflow: hidden;
+}
+
+.fold-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  width: 100%;
+  padding: 7px 8px;
+  background: var(--pink-light);
+  color: var(--pink-dark);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.fold-arrow {
+  flex: 0 0 auto;
+  font-size: 10px;
+}
+
+.fold-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 0;
+  flex: 1;
+  line-height: 1.25;
+}
+
+.fold-item em {
+  font-style: normal;
+  font-size: 9px;
+  font-weight: 500;
+  color: var(--muted);
+}
+
+.fold-total {
+  font-variant-numeric: tabular-nums;
+}
+
+.ledger-table tbody tr.fold-row {
+  background: var(--pink-light);
+}
+
 .cell-input {
   display: block;
   width: 100%;
