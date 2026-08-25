@@ -10,6 +10,8 @@
     computeRunningTotals,
     createEntryFromInvestment,
     parseEntryDate,
+    normalizeDateLabel,
+    formatDateLabel,
     normalizeFoldedBefore,
     toggleFold,
     getFoldSegments,
@@ -147,6 +149,7 @@
         state.entries = normalizeEntries(raw.entries);
         state.foldedBefore = normalizeFoldedBefore(raw.foldedBefore);
         applyStoredSettings(raw);
+        saveData();
         return;
       }
       if (Array.isArray(raw)) {
@@ -160,14 +163,15 @@
   function normalizeEntries(entries) {
     return entries.map((entry) => {
       const id = entry.id || createId();
+      const date = normalizeDateLabel(entry.date);
       const investment = toNumber(entry.investment);
       if (entry.prize !== undefined) {
-        return { ...entry, id, investment, prize: toNumber(entry.prize) };
+        return { ...entry, id, date, investment, prize: toNumber(entry.prize) };
       }
       if (entry.profit !== undefined) {
-        return { ...entry, id, investment, prize: investment + toNumber(entry.profit) };
+        return { ...entry, id, date, investment, prize: investment + toNumber(entry.profit) };
       }
-      return { ...entry, id, investment, prize: 0 };
+      return { ...entry, id, date, investment, prize: 0 };
     });
   }
 
@@ -246,13 +250,6 @@
     return crypto.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`;
   }
 
-  function formatDateLabel(date) {
-    const m = date.getMonth() + 1;
-    const d = date.getDate();
-    const h = date.getHours();
-    return h >= 18 ? `${m}.${d}晚` : `${m}.${d}`;
-  }
-
   function getCumulativeMap() {
     const sorted = getSortedEntries();
     const totals = computeRunningTotals(state.baseTotal, sorted);
@@ -325,10 +322,6 @@
       entry[field] = value;
     }
     if (!options.skipSave) saveData();
-    if (field === "date") {
-      render();
-      return;
-    }
     updateComputedCells();
   }
 
@@ -348,9 +341,10 @@
     });
   }
 
-  function canFoldAt(sorted, date) {
-    const cutoff = parseEntryDate(date)?.getTime() ?? 0;
-    return sorted.some((entry) => (parseEntryDate(entry.date)?.getTime() ?? 0) < cutoff);
+  function formatSigned(n) {
+    const num = toNumber(n);
+    if (num > 0) return `+${formatNum(num)}`;
+    return formatNum(num);
   }
 
   function toggleFoldAt(key) {
@@ -359,17 +353,32 @@
     render();
   }
 
+  function renderFoldActionRow(date) {
+    const row = document.createElement("tr");
+    row.className = "fold-action-row";
+    row.innerHTML = `
+      <td colspan="7">
+        <button type="button" class="fold-action-btn" data-fold-key="${esc(date)}">
+          ▲ 折叠至 ${esc(date)}（含当天）
+        </button>
+      </td>
+    `;
+    row.querySelector(".fold-action-btn").addEventListener("click", () => toggleFoldAt(date));
+    els.ledgerBody.appendChild(row);
+  }
+
   function renderFoldRow(segment, cumulative) {
     const last = segment.entries[segment.entries.length - 1];
     const summary = getFoldSummary(segment, cumulative.get(last.id) ?? 0);
+    const rangeClass = summary.rangeProfit >= 0 ? "positive" : "negative";
     const row = document.createElement("tr");
     row.className = "fold-row";
     row.innerHTML = `
       <td colspan="7">
         <button type="button" class="fold-summary" data-fold-key="${esc(segment.key)}">
-          <span class="fold-arrow">▶</span>
           <span class="fold-item"><em>时间</em>${esc(summary.time)}</span>
           <span class="fold-item"><em>数量</em>${summary.count}</span>
+          <span class="fold-item ${rangeClass}"><em>区间金额</em>${formatSigned(summary.rangeProfit)}</span>
           <span class="fold-item fold-total"><em>总计</em>${formatNum(summary.total)}</span>
         </button>
       </td>
@@ -378,24 +387,14 @@
     els.ledgerBody.appendChild(row);
   }
 
-  function renderEntryRow(entry, cumulative, sorted, showFoldBtn) {
+  function renderEntryRow(entry, cumulative) {
     const profit = getProfit(entry);
     const row = document.createElement("tr");
     row.dataset.id = entry.id;
     if (profit > 0) row.classList.add("is-hit");
-    const folded = state.foldedBefore.includes(entry.date);
 
     row.innerHTML = `
-      <td>
-        <div class="date-cell">
-          ${
-            showFoldBtn
-              ? `<button class="fold-btn${folded ? " is-on" : ""}" type="button" data-fold-key="${esc(entry.date)}" title="向上折叠 ${esc(entry.date)} 之前">▲</button>`
-              : `<span class="fold-spacer"></span>`
-          }
-          <input class="cell-input" data-field="date" value="${esc(entry.date)}" />
-        </div>
-      </td>
+      <td class="cell-date">${esc(entry.date)}</td>
       <td><input class="cell-input cell-num" data-field="investment" type="text" inputmode="decimal" value="${entry.investment || ""}" placeholder="0" /></td>
       <td class="cell-result">${getResultText(entry)}</td>
       <td><input class="cell-input cell-num" data-field="prize" type="text" inputmode="decimal" value="${entry.prize !== 0 ? entry.prize : ""}" placeholder="0" /></td>
@@ -405,10 +404,6 @@
     `;
 
     bindRowEvents(row, entry);
-    row.querySelector(".fold-btn")?.addEventListener("click", (e) => {
-      e.preventDefault();
-      toggleFoldAt(entry.date);
-    });
     els.ledgerBody.appendChild(row);
   }
 
@@ -430,7 +425,8 @@
       }
       segment.entries.forEach((entry, index) => {
         const firstOfDate = index === 0 || entry.date !== segment.entries[index - 1].date;
-        renderEntryRow(entry, cumulative, sorted, firstOfDate && canFoldAt(sorted, entry.date));
+        if (firstOfDate) renderFoldActionRow(entry.date);
+        renderEntryRow(entry, cumulative);
       });
     });
 

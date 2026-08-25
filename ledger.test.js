@@ -9,6 +9,8 @@ const {
   getFoldSummary,
   normalizeSettings,
   themeFromColor,
+  normalizeDateLabel,
+  formatDateLabel,
 } = require("./ledger.js");
 
 test("修改中间行奖金后，最后一行总计必须按全部净赚重算", () => {
@@ -65,29 +67,28 @@ test("新增只填投入时，奖金为0，净赚为负投入，总计按净赚�
   assert.deepEqual(computeRunningTotals(-10000, [entry]), [-12000]);
 });
 
-test("在 7.31 向上折叠时，只收起 7.31 之前的记录", () => {
+test("在 8.20 向上折叠时，8.20 当天记录也要收起", () => {
   const entries = [
-    { id: "1", date: "7.28" },
-    { id: "2", date: "7.30" },
-    { id: "3", date: "7.31" },
-    { id: "4", date: "7.31晚" },
-    { id: "5", date: "8.1" },
+    { id: "1", date: "8.18" },
+    { id: "2", date: "8.20" },
+    { id: "3", date: "8.20" },
+    { id: "4", date: "8.21" },
   ];
-  const segments = getFoldSegments(entries, ["7.31"]);
+  const segments = getFoldSegments(entries, ["8.20"]);
   assert.equal(segments[0].type, "fold");
-  assert.equal(segments[0].key, "7.31");
+  assert.equal(segments[0].key, "8.20");
   assert.deepEqual(
     segments[0].entries.map((e) => e.id),
-    ["1", "2"]
+    ["1", "2", "3"]
   );
   assert.equal(segments[1].type, "rows");
   assert.deepEqual(
     segments[1].entries.map((e) => e.id),
-    ["3", "4", "5"]
+    ["4"]
   );
 });
 
-test("多个折叠同级：7.31 与 8.15 各收起各自之前尚未折叠的一段", () => {
+test("多个折叠同级：每段都包含折叠当天，且互不嵌套", () => {
   const entries = [
     { id: "1", date: "7.28" },
     { id: "2", date: "7.31" },
@@ -104,16 +105,16 @@ test("多个折叠同级：7.31 与 8.15 各收起各自之前尚未折叠的一
   assert.equal(segments[0].key, "7.31");
   assert.deepEqual(
     segments[0].entries.map((e) => e.id),
-    ["1"]
+    ["1", "2"]
   );
   assert.equal(segments[1].key, "8.15");
   assert.deepEqual(
     segments[1].entries.map((e) => e.id),
-    ["2", "3"]
+    ["3", "4"]
   );
   assert.deepEqual(
     segments[2].entries.map((e) => e.id),
-    ["4", "5"]
+    ["5"]
   );
 });
 
@@ -123,18 +124,26 @@ test("再次点击同一日期应取消该段折叠", () => {
   assert.deepEqual(toggleFold(folded, "7.31"), ["7.31"]);
 });
 
-test("折叠条摘要包含时间、数量和该段结束时的总计", () => {
+test("折叠条摘要包含时间、数量、区间金额和该段结束时的总计", () => {
   const entries = [
     { id: "1", date: "7.28", investment: 2000, prize: 0 },
-    { id: "2", date: "7.30", investment: 2000, prize: 0 },
+    { id: "2", date: "7.30", investment: 2000, prize: 5000 },
     { id: "3", date: "7.31", investment: 2000, prize: 0 },
   ];
   const segments = getFoldSegments(entries, ["7.31"]);
   const totals = computeRunningTotals(-10000, entries);
-  const summary = getFoldSummary(segments[0], totals[1]);
-  assert.equal(summary.time, "7.28 – 7.30");
-  assert.equal(summary.count, 2);
-  assert.equal(summary.total, -14000);
+  const summary = getFoldSummary(segments[0], totals[2]);
+  assert.equal(summary.time, "7.28 – 7.31");
+  assert.equal(summary.count, 3);
+  assert.equal(summary.rangeProfit, -1000);
+  assert.equal(summary.total, -11000);
+});
+
+test("日期去掉晚，只保留简单月.日", () => {
+  assert.equal(normalizeDateLabel("8.20晚"), "8.20");
+  assert.equal(normalizeDateLabel("08.05晚"), "8.5");
+  assert.equal(formatDateLabel(new Date(2026, 7, 25, 21, 0, 0)), "8.25");
+  assert.equal(formatDateLabel(new Date(2026, 7, 25, 9, 0, 0)), "8.25");
 });
 
 test("系统设置会规范化标题和主题色", () => {

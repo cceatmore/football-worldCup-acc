@@ -206,31 +206,29 @@ button {
   background: var(--white);
 }
 
-.date-cell {
-  display: flex;
-  align-items: center;
-  width: 100%;
-  min-width: 0;
-}
-
-.fold-btn,
-.fold-spacer {
-  flex: 0 0 14px;
-  width: 14px;
-  height: 20px;
-  padding: 0;
-  color: var(--muted);
-  font-size: 9px;
-  line-height: 20px;
-}
-
-.fold-btn.is-on {
-  color: var(--pink);
-}
-
+.fold-action-row td,
 .fold-row td {
   padding: 0;
   overflow: hidden;
+}
+
+.fold-action-btn {
+  width: 100%;
+  min-height: 36px;
+  padding: 8px 12px;
+  background: #f3f3f3;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.fold-action-btn:active {
+  background: var(--pink-light);
+  color: var(--pink-dark);
+}
+
+.ledger-table tbody tr.fold-action-row {
+  background: #f3f3f3;
 }
 
 .fold-summary {
@@ -239,16 +237,12 @@ button {
   justify-content: space-between;
   gap: 4px;
   width: 100%;
-  padding: 7px 8px;
+  min-height: 44px;
+  padding: 8px 6px;
   background: var(--pink-light);
   color: var(--pink-dark);
   font-size: 11px;
   font-weight: 600;
-}
-
-.fold-arrow {
-  flex: 0 0 auto;
-  font-size: 10px;
 }
 
 .fold-item {
@@ -258,6 +252,10 @@ button {
   min-width: 0;
   flex: 1;
   line-height: 1.25;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums;
 }
 
 .fold-item em {
@@ -313,12 +311,18 @@ button {
 .ledger-table tbody tr.is-hit .cell-profit,
 .ledger-table tbody tr.is-hit .cell-cumulative,
 .ledger-table tbody tr.is-hit .cell-result,
+.ledger-table tbody tr.is-hit .cell-date,
 .ledger-table tbody tr.is-hit .delete-btn {
   color: var(--red);
 }
 
 .ledger-table tbody tr.is-hit .cell-input:focus {
   color: var(--red);
+}
+
+.cell-date {
+  font-size: 11px;
+  font-weight: 600;
 }
 
 .cell-result {

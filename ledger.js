@@ -36,13 +36,22 @@
     };
   }
 
+  function normalizeDateLabel(label) {
+    const raw = String(label || "").trim();
+    const match = raw.match(/^(\d{1,2})\.(\d{1,2})(晚)?$/);
+    if (!match) return raw.replace(/晚/g, "");
+    return `${Number(match[1])}.${Number(match[2])}`;
+  }
+
+  function formatDateLabel(date) {
+    return `${date.getMonth() + 1}.${date.getDate()}`;
+  }
+
   function parseEntryDate(label, year) {
     const match = String(label).match(/^(\d{1,2})\.(\d{1,2})(晚)?$/);
     if (!match) return null;
     const y = year ?? new Date().getFullYear();
-    const date = new Date(y, Number(match[1]) - 1, Number(match[2]));
-    if (match[3]) date.setHours(20, 0, 0, 0);
-    return date;
+    return new Date(y, Number(match[1]) - 1, Number(match[2]));
   }
 
   function dateTime(label) {
@@ -51,13 +60,13 @@
 
   function normalizeFoldedBefore(value) {
     if (!Array.isArray(value)) return [];
-    return [...new Set(value.map((item) => String(item).trim()).filter(Boolean))].sort(
+    return [...new Set(value.map((item) => normalizeDateLabel(item)).filter(Boolean))].sort(
       (a, b) => dateTime(a) - dateTime(b)
     );
   }
 
   function toggleFold(foldedBefore, key) {
-    const label = String(key || "").trim();
+    const label = normalizeDateLabel(key);
     if (!label) return normalizeFoldedBefore(foldedBefore);
     const set = new Set(normalizeFoldedBefore(foldedBefore));
     if (set.has(label)) set.delete(label);
@@ -74,7 +83,7 @@
     keys.forEach((key) => {
       const cutoff = dateTime(key);
       const collapsed = [];
-      while (start < entries.length && dateTime(entries[start].date) < cutoff) {
+      while (start < entries.length && dateTime(entries[start].date) <= cutoff) {
         collapsed.push(entries[start]);
         start += 1;
       }
@@ -144,9 +153,12 @@
   function getFoldSummary(segment, runningTotalAtEnd) {
     const from = segment?.from ?? "";
     const to = segment?.to ?? "";
+    const entries = Array.isArray(segment?.entries) ? segment.entries : [];
+    const rangeProfit = entries.reduce((sum, entry) => sum + getProfit(entry), 0);
     return {
       time: from && to && from !== to ? `${from} – ${to}` : from || to,
-      count: Array.isArray(segment?.entries) ? segment.entries.length : 0,
+      count: entries.length,
+      rangeProfit,
       total: toNumber(runningTotalAtEnd),
     };
   }
@@ -158,6 +170,8 @@
     computeRunningTotals,
     createEntryFromInvestment,
     parseEntryDate,
+    normalizeDateLabel,
+    formatDateLabel,
     normalizeFoldedBefore,
     toggleFold,
     getFoldSegments,
