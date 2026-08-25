@@ -311,7 +311,7 @@
   }
 
   function getResultText(entry) {
-    return isHit(entry) ? "中" : "不中";
+    return isHit(entry) ? "中" : "否";
   }
 
   function getSortedEntries() {

@@ -164,12 +164,28 @@ button {
   border-collapse: collapse;
 }
 
-.ledger-table col {
+.ledger-table col:nth-child(1) {
+  width: 24%;
+}
+
+.ledger-table col:nth-child(2) {
+  width: 9%;
+}
+
+.ledger-table col:nth-child(3) {
+  width: 7%;
+}
+
+.ledger-table col:nth-child(4) {
   width: 11%;
 }
 
-.ledger-table col:nth-child(1) {
-  width: 26%;
+.ledger-table col:nth-child(5) {
+  width: 12%;
+}
+
+.ledger-table col:nth-child(6) {
+  width: 18%;
 }
 
 .ledger-table col:nth-child(7) {
@@ -367,6 +383,11 @@ button {
   font-variant-numeric: tabular-nums;
   overflow: hidden;
   text-overflow: clip;
+}
+
+.ledger-table td.cell-cumulative {
+  padding-left: 2px;
+  padding-right: 2px;
 }
 
 
