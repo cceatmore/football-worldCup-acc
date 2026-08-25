@@ -28,12 +28,43 @@
     });
   }
 
-  function createEntryFromInvestment(investment, dateLabel) {
+  const REMARK_OPTIONS = ["ch", "hy", "hz", "me"];
+  const DEFAULT_REMARK = "me";
+
+  function normalizeRemark(value) {
+    const remark = String(value || "").trim().toLowerCase();
+    return REMARK_OPTIONS.includes(remark) ? remark : "";
+  }
+
+  function createEntryFromInvestment(investment, dateLabel, remark) {
     return {
       date: dateLabel,
       investment: toNumber(investment),
       prize: 0,
+      remark: normalizeRemark(remark) || DEFAULT_REMARK,
     };
+  }
+
+  function getRemarkChartSeries(sortedEntries, rangeStart, enabledRemarks) {
+    const enabled = new Set(
+      (enabledRemarks || REMARK_OPTIONS).filter((item) => REMARK_OPTIONS.includes(item))
+    );
+    const totals = Object.fromEntries(REMARK_OPTIONS.map((item) => [item, 0]));
+    const series = Object.fromEntries(REMARK_OPTIONS.map((item) => [item, []]));
+
+    (sortedEntries || []).forEach((entry) => {
+      const remark = normalizeRemark(entry.remark);
+      if (REMARK_OPTIONS.includes(remark)) {
+        totals[remark] += getProfit(entry);
+      }
+      const date = parseEntryDate(entry.date);
+      if (!date || (rangeStart && date < rangeStart)) return;
+      if (remark && enabled.has(remark)) {
+        series[remark].push({ label: entry.date, value: totals[remark] });
+      }
+    });
+
+    return { series, totals };
   }
 
   function normalizeDateLabel(label) {
@@ -60,48 +91,48 @@
 
   function normalizeFoldedBefore(value) {
     if (!Array.isArray(value)) return [];
-    return [...new Set(value.map((item) => normalizeDateLabel(item)).filter(Boolean))].sort(
-      (a, b) => dateTime(a) - dateTime(b)
-    );
+    const keys = [...new Set(value.map((item) => String(item || "").trim()).filter(Boolean))];
+    return keys.length ? [keys[keys.length - 1]] : [];
   }
 
   function toggleFold(foldedBefore, key) {
-    const label = normalizeDateLabel(key);
-    if (!label) return normalizeFoldedBefore(foldedBefore);
-    const set = new Set(normalizeFoldedBefore(foldedBefore));
-    if (set.has(label)) set.delete(label);
-    else set.add(label);
-    return normalizeFoldedBefore([...set]);
+    const next = String(key || "").trim();
+    if (!next) return normalizeFoldedBefore(foldedBefore);
+    const current = normalizeFoldedBefore(foldedBefore)[0];
+    return current === next ? [] : [next];
+  }
+
+  function findFoldEndIndex(entries, key) {
+    return entries.findIndex((entry) => entry.id === key);
   }
 
   function getFoldSegments(sortedEntries, foldedBefore) {
     const entries = Array.isArray(sortedEntries) ? sortedEntries : [];
-    const keys = normalizeFoldedBefore(foldedBefore);
-    const segments = [];
-    let start = 0;
-
-    keys.forEach((key) => {
-      const cutoff = dateTime(key);
-      const collapsed = [];
-      while (start < entries.length && dateTime(entries[start].date) <= cutoff) {
-        collapsed.push(entries[start]);
-        start += 1;
-      }
-      if (collapsed.length) {
-        segments.push({
-          type: "fold",
-          key,
-          entries: collapsed,
-          from: collapsed[0].date,
-          to: collapsed[collapsed.length - 1].date,
-        });
-      }
-    });
-
-    if (start < entries.length) {
-      segments.push({ type: "rows", entries: entries.slice(start) });
+    const key = normalizeFoldedBefore(foldedBefore)[0];
+    if (!key || !entries.length) {
+      return entries.length ? [{ type: "rows", entries }] : [];
     }
 
+    const end = findFoldEndIndex(entries, key);
+    if (end < 0) {
+      return [{ type: "rows", entries }];
+    }
+
+    const collapsed = entries.slice(0, end + 1);
+    const rest = entries.slice(end + 1);
+    const segments = [];
+    if (collapsed.length) {
+      segments.push({
+        type: "fold",
+        key,
+        entries: collapsed,
+        from: collapsed[0].date,
+        to: collapsed[collapsed.length - 1].date,
+      });
+    }
+    if (rest.length) {
+      segments.push({ type: "rows", entries: rest });
+    }
     return segments;
   }
 
@@ -169,6 +200,10 @@
     getProfit,
     computeRunningTotals,
     createEntryFromInvestment,
+    normalizeRemark,
+    getRemarkChartSeries,
+    REMARK_OPTIONS,
+    DEFAULT_REMARK,
     parseEntryDate,
     normalizeDateLabel,
     formatDateLabel,

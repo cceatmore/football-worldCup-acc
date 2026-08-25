@@ -11,6 +11,10 @@ const {
   themeFromColor,
   normalizeDateLabel,
   formatDateLabel,
+  normalizeRemark,
+  getRemarkChartSeries,
+  REMARK_OPTIONS,
+  DEFAULT_REMARK,
 } = require("./ledger.js");
 
 test("修改中间行奖金后，最后一行总计必须按全部净赚重算", () => {
@@ -63,32 +67,32 @@ test("新增只填投入时，奖金为0，净赚为负投入，总计按净赚�
   assert.equal(entry.date, "8.19");
   assert.equal(entry.investment, 2000);
   assert.equal(entry.prize, 0);
+  assert.equal(entry.remark, "me");
   assert.equal(getProfit(entry), -2000);
   assert.deepEqual(computeRunningTotals(-10000, [entry]), [-12000]);
 });
 
-test("在 8.20 向上折叠时，8.20 当天记录也要收起", () => {
+test("折叠只收到被点的那一行，同一天后面的记录保持展开", () => {
   const entries = [
-    { id: "1", date: "8.18" },
-    { id: "2", date: "8.20" },
-    { id: "3", date: "8.20" },
-    { id: "4", date: "8.21" },
+    { id: "1", date: "8.25" },
+    { id: "2", date: "8.25" },
+    { id: "3", date: "8.25" },
   ];
-  const segments = getFoldSegments(entries, ["8.20"]);
+  const segments = getFoldSegments(entries, ["2"]);
   assert.equal(segments[0].type, "fold");
-  assert.equal(segments[0].key, "8.20");
   assert.deepEqual(
     segments[0].entries.map((e) => e.id),
-    ["1", "2", "3"]
+    ["1", "2"]
   );
   assert.equal(segments[1].type, "rows");
   assert.deepEqual(
     segments[1].entries.map((e) => e.id),
-    ["4"]
+    ["3"]
   );
 });
 
-test("多个折叠同级：每段都包含折叠当天，且互不嵌套", () => {
+test("只允许一层折叠：新的折叠会替换旧的", () => {
+  assert.deepEqual(toggleFold(["2"], "4"), ["4"]);
   const entries = [
     { id: "1", date: "7.28" },
     { id: "2", date: "7.31" },
@@ -96,32 +100,26 @@ test("多个折叠同级：每段都包含折叠当天，且互不嵌套", () =>
     { id: "4", date: "8.15" },
     { id: "5", date: "8.16" },
   ];
-  const segments = getFoldSegments(entries, ["8.15", "7.31"]);
-  assert.equal(segments.length, 3);
+  const segments = getFoldSegments(entries, ["4"]);
   assert.deepEqual(
     segments.map((s) => s.type),
-    ["fold", "fold", "rows"]
+    ["fold", "rows"]
   );
-  assert.equal(segments[0].key, "7.31");
+  assert.equal(segments[0].key, "4");
   assert.deepEqual(
     segments[0].entries.map((e) => e.id),
-    ["1", "2"]
+    ["1", "2", "3", "4"]
   );
-  assert.equal(segments[1].key, "8.15");
   assert.deepEqual(
     segments[1].entries.map((e) => e.id),
-    ["3", "4"]
-  );
-  assert.deepEqual(
-    segments[2].entries.map((e) => e.id),
     ["5"]
   );
 });
 
-test("再次点击同一日期应取消该段折叠", () => {
-  const folded = toggleFold(["7.31"], "7.31");
+test("再次点击同一行应取消该段折叠", () => {
+  const folded = toggleFold(["2"], "2");
   assert.deepEqual(folded, []);
-  assert.deepEqual(toggleFold(folded, "7.31"), ["7.31"]);
+  assert.deepEqual(toggleFold(folded, "2"), ["2"]);
 });
 
 test("折叠条摘要包含时间、数量、区间金额和该段结束时的总计", () => {
@@ -130,7 +128,7 @@ test("折叠条摘要包含时间、数量、区间金额和该段结束时的�
     { id: "2", date: "7.30", investment: 2000, prize: 5000 },
     { id: "3", date: "7.31", investment: 2000, prize: 0 },
   ];
-  const segments = getFoldSegments(entries, ["7.31"]);
+  const segments = getFoldSegments(entries, ["3"]);
   const totals = computeRunningTotals(-10000, entries);
   const summary = getFoldSummary(segments[0], totals[2]);
   assert.equal(summary.time, "7.28 – 7.31");
@@ -161,4 +159,34 @@ test("主题色会生成深色和浅色配套色", () => {
   assert.match(theme.light, /^#[0-9a-f]{6}$/);
   assert.notEqual(theme.dark, theme.color);
   assert.notEqual(theme.light, theme.color);
+});
+
+test("备注只允许 ch/hy/hz/me，新增默认 me", () => {
+  assert.deepEqual(REMARK_OPTIONS, ["ch", "hy", "hz", "me"]);
+  assert.equal(DEFAULT_REMARK, "me");
+  assert.equal(normalizeRemark("HY"), "hy");
+  assert.equal(normalizeRemark(""), "");
+  assert.equal(normalizeRemark("other"), "");
+  assert.equal(createEntryFromInvestment(100, "8.25").remark, "me");
+  assert.equal(createEntryFromInvestment(100, "8.25", "ch").remark, "ch");
+});
+
+test("趋势图按备注拆成四条累计线", () => {
+  const entries = [
+    { date: "8.20", investment: 1000, prize: 0, remark: "me" },
+    { date: "8.21", investment: 1000, prize: 3000, remark: "ch" },
+    { date: "8.22", investment: 1000, prize: 0, remark: "me" },
+  ];
+  const start = new Date(2026, 0, 1);
+  const { series } = getRemarkChartSeries(entries, start, ["me", "ch"]);
+  assert.deepEqual(
+    series.me.map((p) => p.value),
+    [-1000, -2000]
+  );
+  assert.deepEqual(
+    series.ch.map((p) => p.value),
+    [2000]
+  );
+  assert.deepEqual(series.hy, []);
+  assert.deepEqual(series.hz, []);
 });

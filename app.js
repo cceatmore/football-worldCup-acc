@@ -20,7 +20,18 @@
     themeFromColor,
     DEFAULT_TITLE,
     DEFAULT_THEME_COLOR,
+    normalizeRemark,
+    getRemarkChartSeries,
+    REMARK_OPTIONS,
+    DEFAULT_REMARK,
   } = window.Ledger;
+
+  const REMARK_COLORS = {
+    ch: "#1a73e8",
+    hy: "#43a047",
+    hz: "#fb8c00",
+    me: "",
+  };
 
   const state = {
     baseTotal: DEFAULT_BASE_TOTAL,
@@ -30,6 +41,9 @@
     themeColor: DEFAULT_THEME_COLOR,
     activeTab: "ledger",
     chartRange: "week",
+    remarkChartRange: "month",
+    chartRemarks: { ch: true, hy: true, hz: true, me: true },
+    addRemark: DEFAULT_REMARK,
   };
 
   const els = {
@@ -40,7 +54,11 @@
     addEntryBtn: document.querySelector("#add-entry-btn"),
     addModal: document.querySelector("#add-modal"),
     addInvestmentInput: document.querySelector("#add-investment-input"),
+    addRemarkPicks: document.querySelector("#add-remark-picks"),
     addConfirmBtn: document.querySelector("#add-confirm-btn"),
+    remarkPopover: document.querySelector("#remark-popover"),
+    tableWrap: document.querySelector(".table-wrap"),
+    remarkBtns: document.querySelectorAll(".remark-btn"),
     appTitle: document.querySelector("#app-title"),
     settingsBtn: document.querySelector("#settings-btn"),
     settingsModal: document.querySelector("#settings-modal"),
@@ -51,9 +69,12 @@
     tabChart: document.querySelector("#tab-chart"),
     chartCanvas: document.querySelector("#profit-chart"),
     chartEmpty: document.querySelector("#chart-empty"),
+    remarkChartCanvas: document.querySelector("#remark-chart"),
+    remarkChartEmpty: document.querySelector("#remark-chart-empty"),
     rangeProfit: document.querySelector("#range-profit"),
     totalProfit: document.querySelector("#total-profit"),
-    rangeBtns: document.querySelectorAll(".range-btn"),
+    rangeBtns: document.querySelectorAll(".chart-range-bar:not(.remark-range-bar) .range-btn"),
+    remarkRangeBtns: document.querySelectorAll(".remark-range-bar .range-btn"),
   };
 
   init();
@@ -94,6 +115,15 @@
         confirmAddEntry();
       }
     });
+    els.addRemarkPicks?.querySelectorAll(".remark-pick").forEach((btn) => {
+      btn.addEventListener("click", () => setAddRemark(btn.dataset.remark));
+    });
+    document.addEventListener("pointerdown", (e) => {
+      if (els.remarkPopover.classList.contains("hidden")) return;
+      if (els.remarkPopover.contains(e.target) || e.target.closest(".cell-remark")) return;
+      closeRemarkPopover();
+    });
+    els.tableWrap?.addEventListener("scroll", closeRemarkPopover, { passive: true });
     els.settingsBtn.addEventListener("click", openSettingsModal);
     els.settingsConfirmBtn.addEventListener("click", confirmSettings);
     els.settingsModal.querySelectorAll("[data-close-settings]").forEach((el) => {
@@ -118,19 +148,36 @@
     });
     els.tabLedger.addEventListener("click", () => switchTab("ledger"));
     els.tabChart.addEventListener("click", () => switchTab("chart"));
+    els.remarkBtns.forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const remark = btn.dataset.remark;
+        state.chartRemarks[remark] = !state.chartRemarks[remark];
+        btn.classList.toggle("active", state.chartRemarks[remark]);
+        renderRemarkChart();
+      });
+    });
     els.rangeBtns.forEach((btn) => {
       btn.addEventListener("click", () => {
         state.chartRange = btn.dataset.range;
         els.rangeBtns.forEach((b) => b.classList.toggle("active", b === btn));
-        renderChart();
+        renderTotalChart();
+      });
+    });
+    els.remarkRangeBtns.forEach((btn) => {
+      btn.addEventListener("click", () => {
+        state.remarkChartRange = btn.dataset.range;
+        els.remarkRangeBtns.forEach((b) => b.classList.toggle("active", b === btn));
+        renderRemarkChart();
       });
     });
     window.addEventListener("resize", () => {
+      closeRemarkPopover();
       if (state.activeTab === "chart") renderChart();
     });
   }
 
   function switchTab(tab) {
+    closeRemarkPopover();
     state.activeTab = tab;
     els.ledgerView.classList.toggle("hidden", tab !== "ledger");
     els.chartView.classList.toggle("hidden", tab !== "chart");
@@ -165,13 +212,14 @@
       const id = entry.id || createId();
       const date = normalizeDateLabel(entry.date);
       const investment = toNumber(entry.investment);
+      const remark = normalizeRemark(entry.remark);
       if (entry.prize !== undefined) {
-        return { ...entry, id, date, investment, prize: toNumber(entry.prize) };
+        return { ...entry, id, date, investment, prize: toNumber(entry.prize), remark };
       }
       if (entry.profit !== undefined) {
-        return { ...entry, id, date, investment, prize: investment + toNumber(entry.profit) };
+        return { ...entry, id, date, investment, prize: investment + toNumber(entry.profit), remark };
       }
-      return { ...entry, id, date, investment, prize: 0 };
+      return { ...entry, id, date, investment, prize: 0, remark };
     });
   }
 
@@ -280,8 +328,17 @@
     return totals.length ? totals[totals.length - 1] : state.baseTotal;
   }
 
+  function setAddRemark(remark) {
+    state.addRemark = normalizeRemark(remark) || DEFAULT_REMARK;
+    els.addRemarkPicks?.querySelectorAll(".remark-pick").forEach((btn) => {
+      btn.classList.toggle("is-on", btn.dataset.remark === state.addRemark);
+    });
+  }
+
   function openAddModal() {
+    closeRemarkPopover();
     els.addInvestmentInput.value = "";
+    setAddRemark(DEFAULT_REMARK);
     els.addModal.classList.remove("hidden");
     requestAnimationFrame(() => els.addInvestmentInput.focus());
   }
@@ -298,7 +355,7 @@
     }
     const entry = {
       id: createId(),
-      ...createEntryFromInvestment(raw, formatDateLabel(new Date())),
+      ...createEntryFromInvestment(raw, formatDateLabel(new Date()), state.addRemark),
     };
     state.entries.push(entry);
     saveData();
@@ -318,6 +375,8 @@
     if (!entry) return;
     if (field === "investment" || field === "prize") {
       entry[field] = toNumber(value);
+    } else if (field === "remark") {
+      entry.remark = normalizeRemark(value);
     } else {
       entry[field] = value;
     }
@@ -347,24 +406,70 @@
     return formatNum(num);
   }
 
+  function remarkLabel(current) {
+    return normalizeRemark(current) || "—";
+  }
+
+  function closeRemarkPopover() {
+    if (!els.remarkPopover) return;
+    els.remarkPopover.classList.add("hidden");
+    els.remarkPopover.innerHTML = "";
+    delete els.remarkPopover.dataset.entryId;
+  }
+
+  function positionRemarkPopover(anchor) {
+    const pop = els.remarkPopover;
+    const rect = anchor.getBoundingClientRect();
+    const pad = 8;
+    const width = Math.min(168, window.innerWidth - pad * 2);
+    pop.style.width = `${width}px`;
+    pop.style.visibility = "hidden";
+    pop.classList.remove("hidden");
+    const height = pop.offsetHeight;
+    let left = rect.left + rect.width / 2 - width / 2;
+    let top = rect.bottom + 4;
+    left = Math.min(Math.max(pad, left), window.innerWidth - width - pad);
+    if (top + height > window.innerHeight - pad) {
+      top = Math.max(pad, rect.top - height - 4);
+    }
+    pop.style.left = `${left}px`;
+    pop.style.top = `${top}px`;
+    pop.style.visibility = "";
+  }
+
+  function openRemarkPopover(anchor, entry) {
+    const selected = normalizeRemark(entry.remark);
+    const items = ["", ...REMARK_OPTIONS].map((item) => {
+      const on = item === selected ? " is-on" : "";
+      const label = item || "清空";
+      return `<button type="button" class="remark-pop-item${on}" data-remark="${item}" role="option">${label}</button>`;
+    });
+    els.remarkPopover.dataset.entryId = entry.id;
+    els.remarkPopover.innerHTML = items.join("");
+    els.remarkPopover.querySelectorAll(".remark-pop-item").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        updateEntry(entry.id, "remark", btn.dataset.remark);
+        const trigger = document.querySelector(`tr[data-id="${entry.id}"] .cell-remark`);
+        if (trigger) trigger.textContent = remarkLabel(btn.dataset.remark);
+        closeRemarkPopover();
+      });
+    });
+    positionRemarkPopover(anchor);
+  }
+
+  function remarkColor(remark) {
+    if (remark === "me") return state.themeColor || "#e91e8c";
+    return REMARK_COLORS[remark] || "#888";
+  }
+
+  function getEnabledRemarks() {
+    return REMARK_OPTIONS.filter((item) => state.chartRemarks[item]);
+  }
+
   function toggleFoldAt(key) {
     state.foldedBefore = toggleFold(state.foldedBefore, key);
     saveData();
     render();
-  }
-
-  function renderFoldActionRow(date) {
-    const row = document.createElement("tr");
-    row.className = "fold-action-row";
-    row.innerHTML = `
-      <td colspan="7">
-        <button type="button" class="fold-action-btn" data-fold-key="${esc(date)}">
-          ▲ 折叠至 ${esc(date)}（含当天）
-        </button>
-      </td>
-    `;
-    row.querySelector(".fold-action-btn").addEventListener("click", () => toggleFoldAt(date));
-    els.ledgerBody.appendChild(row);
   }
 
   function renderFoldRow(segment, cumulative) {
@@ -374,16 +479,21 @@
     const row = document.createElement("tr");
     row.className = "fold-row";
     row.innerHTML = `
-      <td colspan="7">
-        <button type="button" class="fold-summary" data-fold-key="${esc(segment.key)}">
-          <span class="fold-item"><em>时间</em>${esc(summary.time)}</span>
-          <span class="fold-item"><em>数量</em>${summary.count}</span>
-          <span class="fold-item ${rangeClass}"><em>区间金额</em>${formatSigned(summary.rangeProfit)}</span>
-          <span class="fold-item fold-total"><em>总计</em>${formatNum(summary.total)}</span>
-        </button>
+      <td class="cell-date">
+        <div class="date-cell">
+          <button type="button" class="fold-btn is-on" data-fold-key="${esc(segment.key)}" title="展开">▼</button>
+          <span class="date-text">${esc(summary.time)}</span>
+        </div>
       </td>
+      <td class="cell-count">${summary.count}条</td>
+      <td class="cell-result">—</td>
+      <td class="cell-range-label">区间</td>
+      <td class="cell-profit ${rangeClass}">${formatSigned(summary.rangeProfit)}</td>
+      <td class="cell-cumulative">${formatNum(summary.total)}</td>
+      <td></td>
+      <td></td>
     `;
-    row.querySelector(".fold-summary").addEventListener("click", () => toggleFoldAt(segment.key));
+    row.querySelector(".fold-btn").addEventListener("click", () => toggleFoldAt(segment.key));
     els.ledgerBody.appendChild(row);
   }
 
@@ -394,20 +504,30 @@
     if (profit > 0) row.classList.add("is-hit");
 
     row.innerHTML = `
-      <td class="cell-date">${esc(entry.date)}</td>
+      <td class="cell-date">
+        <div class="date-cell">
+          <button type="button" class="fold-btn" data-fold-key="${esc(entry.id)}" title="折叠至本行（含本行）">▲</button>
+          <span class="date-text">${esc(entry.date)}</span>
+        </div>
+      </td>
       <td><input class="cell-input cell-num" data-field="investment" type="text" inputmode="decimal" value="${entry.investment || ""}" placeholder="0" /></td>
       <td class="cell-result">${getResultText(entry)}</td>
       <td><input class="cell-input cell-num" data-field="prize" type="text" inputmode="decimal" value="${entry.prize !== 0 ? entry.prize : ""}" placeholder="0" /></td>
       <td class="cell-profit">${formatNum(profit)}</td>
       <td class="cell-cumulative">${formatNum(cumulative.get(entry.id) ?? 0)}</td>
+      <td>
+        <button type="button" class="cell-remark" data-field="remark">${esc(remarkLabel(entry.remark))}</button>
+      </td>
       <td><button class="delete-btn" type="button" title="删除">×</button></td>
     `;
 
     bindRowEvents(row, entry);
+    row.querySelector(".fold-btn").addEventListener("click", () => toggleFoldAt(entry.id));
     els.ledgerBody.appendChild(row);
   }
 
   function render() {
+    closeRemarkPopover();
     const cumulative = getCumulativeMap();
     const sorted = getSortedEntries();
 
@@ -423,9 +543,7 @@
         renderFoldRow(segment, cumulative);
         return;
       }
-      segment.entries.forEach((entry, index) => {
-        const firstOfDate = index === 0 || entry.date !== segment.entries[index - 1].date;
-        if (firstOfDate) renderFoldActionRow(entry.date);
+      segment.entries.forEach((entry) => {
         renderEntryRow(entry, cumulative);
       });
     });
@@ -445,6 +563,14 @@
         const value = field === "date" ? e.target.value.trim() : e.target.value;
         updateEntry(entry.id, field, value);
       });
+    });
+    row.querySelector(".cell-remark")?.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (els.remarkPopover.dataset.entryId === entry.id && !els.remarkPopover.classList.contains("hidden")) {
+        closeRemarkPopover();
+        return;
+      }
+      openRemarkPopover(e.currentTarget, entry);
     });
     row.querySelector(".delete-btn").addEventListener("click", () => deleteEntry(entry.id));
   }
@@ -476,41 +602,31 @@
     return { points, totalCumulative: getFinalTotal(), rangeProfit };
   }
 
-  function renderChart() {
-    const { points, totalCumulative, rangeProfit } = getChartData();
-    els.chartEmpty.classList.toggle("hidden", points.length > 0);
-    els.rangeProfit.textContent = formatNum(rangeProfit);
-    els.rangeProfit.className = rangeProfit >= 0 ? "positive" : "negative";
-    els.totalProfit.textContent = formatNum(totalCumulative);
-    els.totalProfit.className = totalCumulative >= 0 ? "positive" : "negative";
-
-    const canvas = els.chartCanvas;
+  function prepareCanvas(canvas) {
     const ctx = canvas.getContext("2d");
     const dpr = window.devicePixelRatio || 1;
     const rect = canvas.parentElement.getBoundingClientRect();
-    canvas.width = rect.width * dpr;
-    canvas.height = rect.height * dpr;
+    canvas.width = Math.max(1, Math.floor(rect.width * dpr));
+    canvas.height = Math.max(1, Math.floor(rect.height * dpr));
     canvas.style.width = `${rect.width}px`;
     canvas.style.height = `${rect.height}px`;
-    ctx.scale(dpr, dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx, W: rect.width, H: rect.height };
+  }
 
-    const W = rect.width;
-    const H = rect.height;
-    ctx.clearRect(0, 0, W, H);
-
-    if (!points.length) return;
-
+  function drawChartBase(ctx, W, H, labels, values) {
     const padding = { top: 20, right: 16, bottom: 36, left: 48 };
     const chartW = W - padding.left - padding.right;
     const chartH = H - padding.top - padding.bottom;
-
-    const values = points.map((p) => p.value);
     let minV = Math.min(0, ...values);
     let maxV = Math.max(0, ...values);
-    if (minV === maxV) { minV -= 100; maxV += 100; }
+    if (minV === maxV) {
+      minV -= 100;
+      maxV += 100;
+    }
     const range = maxV - minV;
-
-    const toX = (i) => padding.left + (points.length === 1 ? chartW / 2 : (i / (points.length - 1)) * chartW);
+    const toX = (i) => padding.left + (labels.length === 1 ? chartW / 2 : (i / (labels.length - 1)) * chartW);
     const toY = (v) => padding.top + chartH - ((v - minV) / range) * chartH;
 
     ctx.strokeStyle = "#e8e8e8";
@@ -534,27 +650,6 @@
       ctx.setLineDash([]);
     }
 
-    ctx.strokeStyle = state.themeColor;
-    ctx.lineWidth = 2;
-    ctx.lineJoin = "round";
-    ctx.beginPath();
-    points.forEach((p, i) => {
-      const x = toX(i);
-      const y = toY(p.value);
-      if (i === 0) ctx.moveTo(x, y);
-      else ctx.lineTo(x, y);
-    });
-    ctx.stroke();
-
-    points.forEach((p, i) => {
-      const x = toX(i);
-      const y = toY(p.value);
-      ctx.fillStyle = state.themeColor;
-      ctx.beginPath();
-      ctx.arc(x, y, 4, 0, Math.PI * 2);
-      ctx.fill();
-    });
-
     ctx.fillStyle = "#888";
     ctx.font = "11px sans-serif";
     ctx.textAlign = "right";
@@ -565,11 +660,101 @@
     }
 
     ctx.textAlign = "center";
-    const labelStep = Math.max(1, Math.ceil(points.length / 6));
-    points.forEach((p, i) => {
-      if (i % labelStep !== 0 && i !== points.length - 1) return;
-      ctx.fillText(p.label, toX(i), H - 8);
+    const labelStep = Math.max(1, Math.ceil(labels.length / 6));
+    labels.forEach((label, i) => {
+      if (i % labelStep !== 0 && i !== labels.length - 1) return;
+      ctx.fillText(label, toX(i), H - 8);
     });
+
+    return { toX, toY };
+  }
+
+  function drawSeries(ctx, values, toX, toY, color, radius) {
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
+    ctx.lineJoin = "round";
+    ctx.beginPath();
+    values.forEach((value, i) => {
+      const x = toX(i);
+      const y = toY(value);
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+    values.forEach((value, i) => {
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.arc(toX(i), toY(value), radius, 0, Math.PI * 2);
+      ctx.fill();
+    });
+  }
+
+  function renderTotalChart() {
+    const { points, totalCumulative, rangeProfit } = getChartData();
+    els.chartEmpty.classList.toggle("hidden", points.length > 0);
+    els.rangeProfit.textContent = formatNum(rangeProfit);
+    els.rangeProfit.className = rangeProfit >= 0 ? "positive" : "negative";
+    els.totalProfit.textContent = formatNum(totalCumulative);
+    els.totalProfit.className = totalCumulative >= 0 ? "positive" : "negative";
+
+    const { ctx, W, H } = prepareCanvas(els.chartCanvas);
+    if (!points.length) return;
+    const { toX, toY } = drawChartBase(
+      ctx,
+      W,
+      H,
+      points.map((p) => p.label),
+      points.map((p) => p.value)
+    );
+    drawSeries(ctx, points.map((p) => p.value), toX, toY, state.themeColor, 4);
+  }
+
+  function renderRemarkChart() {
+    const start = getRangeStart(state.remarkChartRange);
+    const enabled = getEnabledRemarks();
+    const { series } = getRemarkChartSeries(getSortedEntries(), start, enabled);
+    const labelSet = [];
+    const seen = new Set();
+    enabled.forEach((remark) => {
+      (series[remark] || []).forEach((point) => {
+        if (seen.has(point.label)) return;
+        seen.add(point.label);
+        labelSet.push(point.label);
+      });
+    });
+    labelSet.sort((a, b) => (parseEntryDate(a)?.getTime() ?? 0) - (parseEntryDate(b)?.getTime() ?? 0));
+
+    const aligned = {};
+    enabled.forEach((remark) => {
+      const map = new Map((series[remark] || []).map((point) => [point.label, point.value]));
+      let last = 0;
+      aligned[remark] = labelSet.map((label) => {
+        if (map.has(label)) last = map.get(label);
+        return last;
+      });
+    });
+
+    const drawable = enabled.filter((remark) => (series[remark] || []).length);
+    els.remarkChartEmpty.classList.toggle("hidden", drawable.length > 0);
+
+    const { ctx, W, H } = prepareCanvas(els.remarkChartCanvas);
+    if (!drawable.length) return;
+
+    const { toX, toY } = drawChartBase(
+      ctx,
+      W,
+      H,
+      labelSet,
+      drawable.flatMap((remark) => aligned[remark])
+    );
+    drawable.forEach((remark) => {
+      drawSeries(ctx, aligned[remark], toX, toY, remarkColor(remark), 3);
+    });
+  }
+
+  function renderChart() {
+    renderTotalChart();
+    renderRemarkChart();
   }
 
   function formatNum(n) {

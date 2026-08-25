@@ -11,7 +11,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="mobile-web-app-capable" content="yes" />
     <title>盈亏记账</title>
-    <link rel="stylesheet" href="./styles.css?v=9" />
+    <link rel="stylesheet" href="./styles.css?v=18" />
   </head>
   <body>
     <div class="app-shell">
@@ -38,6 +38,7 @@
                 <col />
                 <col />
                 <col />
+                <col />
               </colgroup>
               <thead>
                 <tr>
@@ -47,6 +48,7 @@
                   <th>奖金</th>
                   <th>净赚</th>
                   <th>总计</th>
+                  <th>备注</th>
                   <th></th>
                 </tr>
               </thead>
@@ -72,19 +74,38 @@
             <button class="range-btn" type="button" data-range="year">近一年</button>
           </div>
 
-          <div class="chart-card">
-            <canvas id="profit-chart" aria-label="累计盈利折线图"></canvas>
-            <div id="chart-empty" class="chart-empty hidden">所选时间范围内暂无数据</div>
-          </div>
-
-          <div class="chart-summary">
-            <div class="summary-item">
-              <span>区间盈利</span>
-              <strong id="range-profit">0</strong>
+          <div class="chart-scroll">
+            <div class="chart-card">
+              <canvas id="profit-chart" aria-label="累计盈利折线图"></canvas>
+              <div id="chart-empty" class="chart-empty hidden">所选时间范围内暂无数据</div>
             </div>
-            <div class="summary-item">
-              <span>当前总计</span>
-              <strong id="total-profit">0</strong>
+
+            <div class="chart-summary">
+              <div class="summary-item">
+                <span>区间盈利</span>
+                <strong id="range-profit">0</strong>
+              </div>
+              <div class="summary-item">
+                <span>当前总计</span>
+                <strong id="total-profit">0</strong>
+              </div>
+            </div>
+
+            <div class="chart-block-title">按备注</div>
+            <div class="chart-range-bar remark-range-bar" role="group" aria-label="备注图时间范围">
+              <button class="range-btn active" type="button" data-range="month">近一个月</button>
+              <button class="range-btn" type="button" data-range="3months">近三个月</button>
+              <button class="range-btn" type="button" data-range="6months">近半年</button>
+            </div>
+            <div class="remark-filter" role="group" aria-label="备注筛选">
+              <button class="remark-btn active" type="button" data-remark="ch">ch</button>
+              <button class="remark-btn active" type="button" data-remark="hy">hy</button>
+              <button class="remark-btn active" type="button" data-remark="hz">hz</button>
+              <button class="remark-btn active" type="button" data-remark="me">me</button>
+            </div>
+            <div class="chart-card">
+              <canvas id="remark-chart" aria-label="按备注区分的累计盈利折线图"></canvas>
+              <div id="remark-chart-empty" class="chart-empty hidden">所选备注暂无数据</div>
             </div>
           </div>
         </section>
@@ -111,6 +132,15 @@
           <span>投入</span>
           <input id="add-investment-input" type="text" inputmode="decimal" placeholder="请输入投入金额" autocomplete="off" />
         </label>
+        <div class="modal-field">
+          <span>备注</span>
+          <div id="add-remark-picks" class="remark-picks" role="radiogroup" aria-label="备注">
+            <button type="button" class="remark-pick" data-remark="ch">ch</button>
+            <button type="button" class="remark-pick" data-remark="hy">hy</button>
+            <button type="button" class="remark-pick" data-remark="hz">hz</button>
+            <button type="button" class="remark-pick is-on" data-remark="me">me</button>
+          </div>
+        </div>
         <p class="modal-hint">时间、中否、净赚、总计自动计算，奖金可稍后在表格中补填</p>
         <div class="modal-actions">
           <button type="button" class="modal-btn cancel" data-close-modal>取消</button>
@@ -148,7 +178,9 @@
       </div>
     </div>
 
-    <script src="./ledger.js?v=9"></script>
-    <script src="./app.js?v=9"></script>
+    <div id="remark-popover" class="remark-popover hidden" role="listbox" aria-label="选择备注"></div>
+
+    <script src="./ledger.js?v=18"></script>
+    <script src="./app.js?v=18"></script>
   </body>
 </html>
