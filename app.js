@@ -194,7 +194,7 @@
       if (raw?.entries) {
         state.baseTotal = raw.baseTotal !== undefined ? toNumber(raw.baseTotal) : DEFAULT_BASE_TOTAL;
         state.entries = normalizeEntries(raw.entries);
-        state.foldedBefore = normalizeFoldedBefore(raw.foldedBefore);
+        state.foldedBefore = normalizeFoldedBefore(raw.foldedBefore, state.entries);
         applyStoredSettings(raw);
         saveData();
         return;
@@ -467,7 +467,7 @@
   }
 
   function toggleFoldAt(key) {
-    state.foldedBefore = toggleFold(state.foldedBefore, key);
+    state.foldedBefore = toggleFold(state.foldedBefore, key, getSortedEntries());
     saveData();
     render();
   }
@@ -479,19 +479,16 @@
     const row = document.createElement("tr");
     row.className = "fold-row";
     row.innerHTML = `
-      <td class="cell-date">
-        <div class="date-cell">
-          <button type="button" class="fold-btn is-on" data-fold-key="${esc(segment.key)}" title="展开">▼</button>
-          <span class="date-text">${esc(summary.time)}</span>
-        </div>
-      </td>
+      <td class="cell-date"><span class="date-text">${esc(summary.time)}</span></td>
       <td class="cell-count">${summary.count}条</td>
       <td class="cell-result">—</td>
       <td class="cell-range-label">区间</td>
       <td class="cell-profit ${rangeClass}">${formatSigned(summary.rangeProfit)}</td>
       <td class="cell-cumulative">${formatNum(summary.total)}</td>
       <td></td>
-      <td></td>
+      <td class="cell-actions">
+        <button type="button" class="fold-btn is-on" data-fold-key="${esc(segment.key)}" title="展开">▼</button>
+      </td>
     `;
     row.querySelector(".fold-btn").addEventListener("click", () => toggleFoldAt(segment.key));
     els.ledgerBody.appendChild(row);
@@ -504,12 +501,7 @@
     if (profit > 0) row.classList.add("is-hit");
 
     row.innerHTML = `
-      <td class="cell-date">
-        <div class="date-cell">
-          <button type="button" class="fold-btn" data-fold-key="${esc(entry.id)}" title="折叠至本行（含本行）">▲</button>
-          <span class="date-text">${esc(entry.date)}</span>
-        </div>
-      </td>
+      <td class="cell-date"><span class="date-text">${esc(entry.date)}</span></td>
       <td><input class="cell-input cell-num" data-field="investment" type="text" inputmode="decimal" value="${entry.investment || ""}" placeholder="0" /></td>
       <td class="cell-result">${getResultText(entry)}</td>
       <td><input class="cell-input cell-num" data-field="prize" type="text" inputmode="decimal" value="${entry.prize !== 0 ? entry.prize : ""}" placeholder="0" /></td>
@@ -518,7 +510,10 @@
       <td>
         <button type="button" class="cell-remark" data-field="remark">${esc(remarkLabel(entry.remark))}</button>
       </td>
-      <td><button class="delete-btn" type="button" title="删除">×</button></td>
+      <td class="cell-actions">
+        <button type="button" class="fold-btn" data-fold-key="${esc(entry.id)}" title="折叠至本行（含本行）">▲</button>
+        <button class="delete-btn" type="button" title="删除">×</button>
+      </td>
     `;
 
     bindRowEvents(row, entry);
@@ -537,6 +532,7 @@
       els.emptyState.innerHTML = `<p>暂无记录，起始总计 ${formatNum(state.baseTotal)}</p><p>点击「新增」添加每日方案</p>`;
     }
 
+    state.foldedBefore = normalizeFoldedBefore(state.foldedBefore, sorted);
     const segments = getFoldSegments(sorted, state.foldedBefore);
     segments.forEach((segment) => {
       if (segment.type === "fold") {

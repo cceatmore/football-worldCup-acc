@@ -91,35 +91,57 @@ test("折叠只收到被点的那一行，同一天后面的记录保持展开",
   );
 });
 
-test("只允许一层折叠：新的折叠会替换旧的", () => {
-  assert.deepEqual(toggleFold(["2"], "4"), ["4"]);
+test("两段折叠同级并存，不会合成一条", () => {
   const entries = [
-    { id: "1", date: "7.28" },
-    { id: "2", date: "7.31" },
-    { id: "3", date: "8.1" },
-    { id: "4", date: "8.15" },
-    { id: "5", date: "8.16" },
+    { id: "1", date: "8.20" },
+    { id: "2", date: "8.21" },
+    { id: "3", date: "8.22" },
+    { id: "4", date: "8.23" },
+    { id: "5", date: "8.24" },
+    { id: "6", date: "8.25" },
   ];
-  const segments = getFoldSegments(entries, ["4"]);
+  let folds = toggleFold([], "3", entries);
+  folds = toggleFold(folds, "6", entries);
+  const segments = getFoldSegments(entries, folds);
   assert.deepEqual(
     segments.map((s) => s.type),
-    ["fold", "rows"]
+    ["fold", "fold"]
   );
-  assert.equal(segments[0].key, "4");
   assert.deepEqual(
     segments[0].entries.map((e) => e.id),
-    ["1", "2", "3", "4"]
+    ["1", "2", "3"]
   );
   assert.deepEqual(
     segments[1].entries.map((e) => e.id),
-    ["5"]
+    ["4", "5", "6"]
   );
 });
 
-test("再次点击同一行应取消该段折叠", () => {
-  const folded = toggleFold(["2"], "2");
-  assert.deepEqual(folded, []);
-  assert.deepEqual(toggleFold(folded, "2"), ["2"]);
+test("再次点击同一段只展开该段，另一段保持折叠", () => {
+  const entries = [
+    { id: "1", date: "8.20" },
+    { id: "2", date: "8.21" },
+    { id: "3", date: "8.22" },
+    { id: "4", date: "8.23" },
+    { id: "5", date: "8.24" },
+    { id: "6", date: "8.25" },
+  ];
+  let folds = toggleFold([], "3", entries);
+  folds = toggleFold(folds, "6", entries);
+  folds = toggleFold(folds, "3", entries);
+  const segments = getFoldSegments(entries, folds);
+  assert.deepEqual(
+    segments.map((s) => s.type),
+    ["rows", "fold"]
+  );
+  assert.deepEqual(
+    segments[0].entries.map((e) => e.id),
+    ["1", "2", "3"]
+  );
+  assert.deepEqual(
+    segments[1].entries.map((e) => e.id),
+    ["4", "5", "6"]
+  );
 });
 
 test("折叠条摘要包含时间、数量、区间金额和该段结束时的总计", () => {

@@ -89,49 +89,114 @@
     return parseEntryDate(label)?.getTime() ?? 0;
   }
 
-  function normalizeFoldedBefore(value) {
-    if (!Array.isArray(value)) return [];
-    const keys = [...new Set(value.map((item) => String(item || "").trim()).filter(Boolean))];
-    return keys.length ? [keys[keys.length - 1]] : [];
+  function indexById(entries) {
+    return new Map((entries || []).map((entry, index) => [entry.id, index]));
   }
 
-  function toggleFold(foldedBefore, key) {
+  function normalizeFoldedBefore(value, sortedEntries) {
+    const entries = Array.isArray(sortedEntries) ? sortedEntries : [];
+    const ids = indexById(entries);
+    if (!Array.isArray(value) || !entries.length) return [];
+
+    const ranges = [];
+    value.forEach((item) => {
+      if (item && typeof item === "object") {
+        const from = String(item.from || "").trim();
+        const to = String(item.to || "").trim();
+        if (ids.has(from) && ids.has(to) && ids.get(from) <= ids.get(to)) {
+          ranges.push({ from, to });
+        }
+        return;
+      }
+      const to = String(item || "").trim();
+      if (!ids.has(to)) return;
+      const toIdx = ids.get(to);
+      const used = new Set();
+      ranges.forEach((range) => {
+        for (let i = ids.get(range.from); i <= ids.get(range.to); i++) used.add(i);
+      });
+      let fromIdx = 0;
+      while (fromIdx <= toIdx && used.has(fromIdx)) fromIdx += 1;
+      if (fromIdx <= toIdx) {
+        ranges.push({ from: entries[fromIdx].id, to });
+      }
+    });
+
+    ranges.sort((a, b) => ids.get(a.from) - ids.get(b.from));
+    const cleaned = [];
+    let lastEnd = -1;
+    ranges.forEach((range) => {
+      const start = ids.get(range.from);
+      const end = ids.get(range.to);
+      if (start > lastEnd) {
+        cleaned.push({ from: range.from, to: range.to });
+        lastEnd = end;
+      }
+    });
+    return cleaned;
+  }
+
+  function toggleFold(foldedBefore, key, sortedEntries) {
+    const entries = Array.isArray(sortedEntries) ? sortedEntries : [];
     const next = String(key || "").trim();
-    if (!next) return normalizeFoldedBefore(foldedBefore);
-    const current = normalizeFoldedBefore(foldedBefore)[0];
-    return current === next ? [] : [next];
-  }
+    const folds = normalizeFoldedBefore(foldedBefore, entries);
+    if (!next || !entries.length) return folds;
 
-  function findFoldEndIndex(entries, key) {
-    return entries.findIndex((entry) => entry.id === key);
+    const ids = indexById(entries);
+    const idx = ids.get(next);
+    if (idx === undefined) return folds;
+
+    const hit = folds.find((range) => {
+      const start = ids.get(range.from);
+      const end = ids.get(range.to);
+      return range.to === next || (idx >= start && idx <= end);
+    });
+    if (hit) {
+      return folds.filter((range) => range !== hit);
+    }
+
+    const foldedIndex = new Set();
+    folds.forEach((range) => {
+      for (let i = ids.get(range.from); i <= ids.get(range.to); i++) foldedIndex.add(i);
+    });
+
+    let fromIdx = idx;
+    while (fromIdx > 0 && !foldedIndex.has(fromIdx - 1)) {
+      fromIdx -= 1;
+    }
+
+    return normalizeFoldedBefore([...folds, { from: entries[fromIdx].id, to: next }], entries);
   }
 
   function getFoldSegments(sortedEntries, foldedBefore) {
     const entries = Array.isArray(sortedEntries) ? sortedEntries : [];
-    const key = normalizeFoldedBefore(foldedBefore)[0];
-    if (!key || !entries.length) {
-      return entries.length ? [{ type: "rows", entries }] : [];
-    }
+    const folds = normalizeFoldedBefore(foldedBefore, entries);
+    if (!entries.length) return [];
+    if (!folds.length) return [{ type: "rows", entries }];
 
-    const end = findFoldEndIndex(entries, key);
-    if (end < 0) {
-      return [{ type: "rows", entries }];
-    }
-
-    const collapsed = entries.slice(0, end + 1);
-    const rest = entries.slice(end + 1);
+    const ids = indexById(entries);
+    const foldByStart = new Map(folds.map((range) => [ids.get(range.from), range]));
     const segments = [];
-    if (collapsed.length) {
-      segments.push({
-        type: "fold",
-        key,
-        entries: collapsed,
-        from: collapsed[0].date,
-        to: collapsed[collapsed.length - 1].date,
-      });
-    }
-    if (rest.length) {
-      segments.push({ type: "rows", entries: rest });
+    let i = 0;
+    while (i < entries.length) {
+      const fold = foldByStart.get(i);
+      if (fold) {
+        const end = ids.get(fold.to);
+        const collapsed = entries.slice(i, end + 1);
+        segments.push({
+          type: "fold",
+          key: fold.to,
+          entries: collapsed,
+          from: collapsed[0].date,
+          to: collapsed[collapsed.length - 1].date,
+        });
+        i = end + 1;
+        continue;
+      }
+      const start = i;
+      i += 1;
+      while (i < entries.length && !foldByStart.has(i)) i += 1;
+      segments.push({ type: "rows", entries: entries.slice(start, i) });
     }
     return segments;
   }

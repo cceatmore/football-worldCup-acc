@@ -165,7 +165,7 @@ button {
 }
 
 .ledger-table col:nth-child(1) {
-  width: 24%;
+  width: 14%;
 }
 
 .ledger-table col:nth-child(2) {
@@ -189,11 +189,11 @@ button {
 }
 
 .ledger-table col:nth-child(7) {
-  width: 12%;
+  width: 11%;
 }
 
 .ledger-table col:nth-child(8) {
-  width: 7%;
+  width: 18%;
 }
 
 .ledger-table thead tr {
@@ -239,11 +239,15 @@ button {
 }
 
 .ledger-table td.cell-date {
+  padding: 0 2px;
+}
+
+.ledger-table td.cell-actions {
   padding: 0;
   height: 1px;
 }
 
-.date-cell {
+.cell-actions {
   display: flex;
   align-items: stretch;
   width: 100%;
@@ -252,8 +256,8 @@ button {
 }
 
 .fold-btn {
-  flex: 0 0 56px;
-  width: 56px;
+  flex: 1;
+  min-width: 0;
   align-self: stretch;
   display: flex;
   align-items: center;
@@ -272,11 +276,8 @@ button {
 }
 
 .date-text {
-  flex: 1;
+  display: block;
   min-width: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
   padding: 0 2px;
   font-size: 11px;
   font-weight: 600;
@@ -396,12 +397,13 @@ button {
 }
 
 .delete-btn {
+  flex: 0 0 22px;
+  width: 22px;
   color: var(--muted);
   font-size: 16px;
   line-height: 1;
   padding: 0;
-  border-radius: 4px;
-  width: 100%;
+  border-radius: 0;
 }
 
 .delete-btn:active {
